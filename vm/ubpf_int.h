@@ -26,6 +26,8 @@
 struct ebpf_inst;
 typedef uint64_t (*ext_func)(uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4);
 
+#define UBPF_MAX_MAPS 16
+
 struct ubpf_vm {
     struct ebpf_inst *insts;
     uint16_t num_insts;
@@ -34,10 +36,9 @@ struct ubpf_vm {
     ext_func *ext_funcs;
     const char **ext_func_names;
     bool bounds_check_enabled;
-    ubpf_map_resolver_fn map_resolver;
-    void * map_resolver_context;
     ubpf_map_create_fn map_create;
     void * map_create_context;
+    int maps_fd[UBPF_MAX_MAPS];
 };
 
 char *ubpf_error(const char *fmt, ...);

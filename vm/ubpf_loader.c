@@ -70,11 +70,36 @@ ubpf_lookup_string(struct section * string_table, uint64_t offset)
     }
 }
 
+static
+int ubpf_find_section(
+    struct section * sections, 
+    size_t section_count, 
+    Elf64_Word section_type, 
+    Elf64_Word section_flags,
+    int str_shndx,
+    const char * section_name)
+{
+    int i;
+    for (i = 0; i < section_count; i++) {
+        const Elf64_Shdr *shdr = sections[i].shdr;
+        if (shdr->sh_type == section_type &&
+                shdr->sh_flags == section_flags) {
+            const char * name;
+            name = ubpf_lookup_string(&sections[str_shndx], shdr->sh_name);
+            if (!section_name || (name && strcmp(section_name, name) == 0)) {
+                return i;
+            }
+        }
+    }
+    return 0;
+}
+
 int
 ubpf_load_elf_by_name(struct ubpf_vm *vm, const void *elf, size_t elf_size, const char * name, char **errmsg)
 {
     struct bounds b = { .base=elf, .size=elf_size };
-    void *text_copy = NULL;
+    // text_copy is an array of eBPF instructions
+    struct ebpf_inst *text_copy = NULL;
     int i;
 
     const Elf64_Ehdr *ehdr = bounds_check(&b, 0, sizeof(*ehdr));
@@ -145,33 +170,38 @@ ubpf_load_elf_by_name(struct ubpf_vm *vm, const void *elf, size_t elf_size, cons
     }
 
     /* Find string table index */
-    int str_shndx = 0;
-    for (i = 0; i < ehdr->e_shnum; i++) {
-        const Elf64_Shdr *shdr = sections[i].shdr;
-        if (shdr->sh_type == SHT_STRTAB) {
-            str_shndx = i;
-            break;
-        }
+    int str_shndx = ubpf_find_section(sections, ehdr->e_shnum, SHT_STRTAB, 0, 0, NULL);
+    if (!str_shndx) {
+        *errmsg = ubpf_error("string table section not found");
+        goto error;
     }
 
-    /* Find named text section */
-    int text_shndx = 0;
-    for (i = 0; i < ehdr->e_shnum; i++) {
-        const Elf64_Shdr *shdr = sections[i].shdr;
-        if (shdr->sh_type == SHT_PROGBITS &&
-                shdr->sh_flags == (SHF_ALLOC|SHF_EXECINSTR)) {
-            const char * section_name;
-            section_name = ubpf_lookup_string(&sections[str_shndx], shdr->sh_name);
-            if (!name || (section_name && strcmp(section_name, name) == 0)) {
-                text_shndx = i;
-                break;
-            }
-        }
-    }
-
+    int text_shndx = ubpf_find_section(sections, ehdr->e_shnum, SHT_PROGBITS, SHF_ALLOC|SHF_EXECINSTR, str_shndx, name);
     if (!text_shndx) {
         *errmsg = ubpf_error("text section not found");
         goto error;
+    }
+
+    // Look for any maps
+    int maps_shndx = ubpf_find_section(sections, ehdr->e_shnum, SHT_PROGBITS, SHF_ALLOC|SHF_WRITE, str_shndx, "maps");
+    if (maps_shndx) {
+        struct section *maps = &sections[maps_shndx];
+        int i;
+        const struct ubpf_map_def * map_defs = maps->data;
+
+        if (maps->size > (UBPF_MAX_MAPS * sizeof(struct ubpf_map_def))) {
+            *errmsg = ubpf_error("too many maps");
+            goto error;
+        }
+
+        for (i = 0; i < maps->size / sizeof(struct ubpf_map_def); i ++)
+        {
+            vm->maps_fd[i] = vm->map_create(vm->map_create_context, &map_defs[i]);
+            if (vm->maps_fd[i] == -1) {
+                *errmsg = ubpf_error("map creation failed");
+                goto error;
+            }
+        }
     }
 
     struct section *text = &sections[text_shndx];
@@ -213,10 +243,7 @@ ubpf_load_elf_by_name(struct ubpf_vm *vm, const void *elf, size_t elf_size, cons
         for (j = 0; j < rel->size/sizeof(Elf64_Rel); j++) {
             const Elf64_Rel *r = &rs[j];
 
-            if (ELF64_R_TYPE(r->r_info) != 2) {
-                *errmsg = ubpf_error("bad relocation type %u", ELF64_R_TYPE(r->r_info));
-                goto error;
-            }
+            unsigned int r_indx = r->r_offset / sizeof(struct ebpf_inst);
 
             uint32_t sym_idx = ELF64_R_SYM(r->r_info);
             if (sym_idx >= num_syms) {
@@ -225,25 +252,46 @@ ubpf_load_elf_by_name(struct ubpf_vm *vm, const void *elf, size_t elf_size, cons
             }
 
             const Elf64_Sym *sym = &syms[sym_idx];
-            const char * sym_name = ubpf_lookup_string(&sections[str_shndx], sym->st_name);
 
-            if (!sym_name) {
-                *errmsg = ubpf_error("bad symbol name");
+            switch (ELF64_R_TYPE(r->r_info)) {
+            // Map relocation
+            case 1: {
+                if (!maps_shndx || sym->st_value >= sections[maps_shndx].size) {
+                    *errmsg = ubpf_error("bad map index");
+                    goto error;
+                }
+                // Set the destination register to 1 to flag this as a LDDW MAP_FD instruction.
+                // Set the immediate value to the fd returned from map_create
+                text_copy[r_indx].dst = 1;
+                text_copy[r_indx].imm = vm->maps_fd[sym->st_value / sizeof(struct ubpf_map_def)];
+                break;
+            }
+            // Function relocation
+            case 2: {
+                const char * sym_name = ubpf_lookup_string(&sections[str_shndx], sym->st_name);
+
+                if (!sym_name) {
+                    *errmsg = ubpf_error("bad symbol name");
+                    goto error;
+                }
+
+                if (r->r_offset + 8 > text->size) {
+                    *errmsg = ubpf_error("bad relocation offset");
+                    goto error;
+                }
+
+                unsigned int imm = ubpf_lookup_registered_function(vm, sym_name);
+                if (imm == -1) {
+                    *errmsg = ubpf_error("function '%s' not found", sym_name);
+                    goto error;
+                }
+                text_copy[r_indx].imm = imm;
+                break;
+            }
+            default:
+                *errmsg = ubpf_error("bad relocation type %u", ELF64_R_TYPE(r->r_info));
                 goto error;
             }
-
-            if (r->r_offset + 8 > text->size) {
-                *errmsg = ubpf_error("bad relocation offset");
-                goto error;
-            }
-
-            unsigned int imm = ubpf_lookup_registered_function(vm, sym_name);
-            if (imm == -1) {
-                *errmsg = ubpf_error("function '%s' not found", sym_name);
-                goto error;
-            }
-
-            *(uint32_t *)(text_copy + r->r_offset + 4) = imm;
         }
     }
 
