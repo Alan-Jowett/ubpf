@@ -23,6 +23,17 @@
 struct ubpf_vm;
 typedef uint64_t (*ubpf_jit_fn)(void *mem, size_t mem_len);
 
+struct ubpf_map_def {
+    unsigned int type;
+    unsigned int key_size;
+    unsigned int vlaue_size;
+    unsigned int max_entries;
+    unsigned int map_flags;
+};
+
+typedef uint64_t (*ubpf_map_resolver_fn)(void *context, uint64_t fd);
+typedef uint64_t (*ubpf_map_create_fn)(void *context, struct ubpf_map_def * map_def);
+
 struct ubpf_vm *ubpf_create(void);
 void ubpf_destroy(struct ubpf_vm *vm);
 
@@ -47,6 +58,25 @@ bool toggle_bounds_check(struct ubpf_vm *vm, bool enable);
  * Returns 0 on success, -1 on error.
  */
 int ubpf_register(struct ubpf_vm *vm, unsigned int idx, const char *name, void *fn);
+
+/*
+ * Register a function used to resolve map FD to address.
+ *
+ * When processing a lddw instruction with the map_fd bit set, invoke the
+ * call back to resolve map fd to address.
+ *
+ * Returns 0 on sucess, -1 on error.
+ */
+int ubpf_register_map_resolver(struct ubpf_vm *vm, void *context, ubpf_map_resolver_fn resolver_fn);
+
+/*
+ * Register a function used to create a map and return a fd.
+ *
+ * When loading an ELF file, the ubpf_map_create_fn is invoked for each map.
+ *
+ * Returns 0 on sucess, -1 on error.
+ */
+int ubpf_register_map_create(struct ubpf_vm *vm, void *context, ubpf_map_create_fn create_fn);
 
 /*
  * Load code into a VM

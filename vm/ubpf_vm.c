@@ -84,6 +84,28 @@ ubpf_register(struct ubpf_vm *vm, unsigned int idx, const char *name, void *fn)
     return 0;
 }
 
+int ubpf_register_map_resolver(struct ubpf_vm *vm, void *context, ubpf_map_resolver_fn resolver_fn)
+{
+    if (vm->map_resolver != NULL) {
+        return -1;
+    }
+
+    vm->map_resolver = resolver_fn;
+    vm->map_resolver_context = context;
+    return 0;
+}
+
+int ubpf_register_map_create(struct ubpf_vm *vm, void *context, ubpf_map_create_fn create_fn)
+{
+    if (vm->map_create != NULL) {
+        return -1;
+    }
+
+    vm->map_create = create_fn;
+    vm->map_create_context = context;
+    return 0;
+}
+
 unsigned int
 ubpf_lookup_registered_function(struct ubpf_vm *vm, const char *name)
 {
