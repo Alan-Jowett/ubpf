@@ -26,7 +26,7 @@ typedef uint64_t (*ubpf_jit_fn)(void *mem, size_t mem_len);
 struct ubpf_map_def {
     unsigned int type;
     unsigned int key_size;
-    unsigned int vlaue_size;
+    unsigned int value_size;
     unsigned int max_entries;
     unsigned int map_flags;
     unsigned int inner_map_idx;
