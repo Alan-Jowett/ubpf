@@ -31,6 +31,7 @@
 void ubpf_set_register_offset(int x);
 static void *readfile(const char *path, size_t maxlen, size_t *len);
 static void register_functions(struct ubpf_vm *vm);
+static uint64_t map_create(void *context, const struct ubpf_map_def * def);
 
 static void usage(const char *name)
 {
@@ -42,6 +43,8 @@ static void usage(const char *name)
     fprintf(stderr, "\nOther options:\n");
     fprintf(stderr, "  -r, --register-offset NUM: Change the mapping from eBPF to x86 registers\n");
 }
+
+char map_create_context = 1;
 
 int main(int argc, char **argv)
 {
@@ -120,9 +123,11 @@ int main(int argc, char **argv)
     char *errmsg;
     int rv;
     if (elf) {
-	rv = ubpf_load_elf_by_name(vm, code, code_len, section_name, &errmsg);
+        ubpf_register_map_create(vm, &map_create_context, map_create);
+
+        rv = ubpf_load_elf_by_name(vm, code, code_len, section_name, &errmsg);
     } else {
-	rv = ubpf_load(vm, code, code_len, &errmsg);
+    	rv = ubpf_load(vm, code, code_len, &errmsg);
     }
 
     free(code);
@@ -239,4 +244,13 @@ register_functions(struct ubpf_vm *vm)
     ubpf_register(vm, 2, "trash_registers", trash_registers);
     ubpf_register(vm, 3, "sqrti", sqrti);
     ubpf_register(vm, 4, "strcmp_ext", strcmp);
+}
+
+static uint64_t map_create(void *context, const struct ubpf_map_def * def)
+{
+    static uint64_t next_fd = 0x123456789abcdef;
+    if (!context || !def) {
+        return -1;
+    }
+    return next_fd++;
 }
