@@ -39,6 +39,8 @@ struct ubpf_vm {
     ubpf_map_create_fn map_create;
     void * map_create_context;
     int maps_fd[UBPF_MAX_MAPS];
+    ubpf_map_resolver_fn map_resolver;
+    void * map_resolver_context;
 };
 
 char *ubpf_error(const char *fmt, ...);
