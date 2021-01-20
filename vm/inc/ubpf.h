@@ -62,7 +62,6 @@ bool toggle_bounds_check(struct ubpf_vm *vm, bool enable);
 int ubpf_register(struct ubpf_vm *vm, unsigned int idx, const char *name, void *fn);
 
 /*
-<<<<<<< HEAD
  * Register a function used to create a map and return a fd.
  *
  * When loading an ELF file, the ubpf_map_create_fn is invoked for each map.
@@ -70,7 +69,8 @@ int ubpf_register(struct ubpf_vm *vm, unsigned int idx, const char *name, void *
  * Returns 0 on sucess, -1 on error.
  */
 int ubpf_register_map_create(struct ubpf_vm *vm, void *context, ubpf_map_create_fn create_fn);
-=======
+
+/*
  * Register a function used to resolve map FD to address.
  *
  * When processing a lddw instruction with the map_fd bit set, invoke the
@@ -79,7 +79,6 @@ int ubpf_register_map_create(struct ubpf_vm *vm, void *context, ubpf_map_create_
  * Returns 0 on sucess, -1 on error.
  */
 int ubpf_register_map_resolver(struct ubpf_vm *vm, void *context, ubpf_map_resolver_fn resolver_fn);
->>>>>>> lddw_maps
 
 /*
  * Load code into a VM
