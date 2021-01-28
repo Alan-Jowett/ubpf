@@ -19,9 +19,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#if !defined(_WIN32)
 #include <unistd.h>
-#include <inttypes.h>
 #include <sys/mman.h>
+#endif
+#include <inttypes.h>
 #include <errno.h>
 #include <assert.h>
 #include "ubpf_int.h"
@@ -56,6 +58,7 @@ map_register(int r)
     return register_map[r % REGISTER_MAP_SIZE];
 }
 
+#if !defined(_WIN32)
 /* For testing, this changes the mapping between x86 and eBPF registers */
 void
 ubpf_set_register_offset(int x)
@@ -78,6 +81,7 @@ ubpf_set_register_offset(int x)
         }
     }
 }
+#endif
 
 static int
 translate(struct ubpf_vm *vm, struct jit_state *state, char **errmsg)
@@ -590,6 +594,7 @@ out:
     return result;
 }
 
+#if !defined(_WIN32)
 ubpf_jit_fn
 ubpf_compile(struct ubpf_vm *vm, char **errmsg)
 {
@@ -638,3 +643,4 @@ out:
     }
     return vm->jitted;
 }
+#endif

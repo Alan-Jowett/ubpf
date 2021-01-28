@@ -17,6 +17,10 @@
 #ifndef UBPF_INT_H
 #define UBPF_INT_H
 
+#if defined(_WIN32)
+#include "platform.h"
+#endif
+
 #include <ubpf.h>
 #include "ebpf.h"
 

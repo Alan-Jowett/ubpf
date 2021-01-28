@@ -21,8 +21,10 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <inttypes.h>
+#if !defined(_WIN32)
 #include <sys/mman.h>
 #include <endian.h>
+#endif
 #include "ubpf_int.h"
 
 #define MAX_EXT_FUNCS 64
@@ -65,7 +67,9 @@ void
 ubpf_destroy(struct ubpf_vm *vm)
 {
     if (vm->jitted) {
+#if !defined(_WIN32)
         munmap(vm->jitted, vm->jitted_size);
+#endif
     }
     free(vm->insts);
     free(vm->ext_funcs);
@@ -168,6 +172,7 @@ u32(uint64_t x)
     return x;
 }
 
+#if !defined(_WIN32)
 uint64_t
 ubpf_exec(const struct ubpf_vm *vm, void *mem, size_t mem_len)
 {
@@ -623,6 +628,7 @@ ubpf_exec(const struct ubpf_vm *vm, void *mem, size_t mem_len)
         }
     }
 }
+#endif
 
 static bool
 validate(const struct ubpf_vm *vm, const struct ebpf_inst *insts, uint32_t num_insts, char **errmsg)
@@ -801,6 +807,7 @@ validate(const struct ubpf_vm *vm, const struct ebpf_inst *insts, uint32_t num_i
     return true;
 }
 
+#if !defined(_WIN32)
 static bool
 bounds_check(const struct ubpf_vm *vm, void *addr, int size, const char *type, uint16_t cur_pc, void *mem, size_t mem_len, void *stack)
 {
@@ -818,6 +825,7 @@ bounds_check(const struct ubpf_vm *vm, void *addr, int size, const char *type, u
         return false;
     }
 }
+#endif
 
 char *
 ubpf_error(const char *fmt, ...)
