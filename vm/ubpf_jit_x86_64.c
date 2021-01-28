@@ -357,11 +357,22 @@ translate(struct ubpf_vm *vm, struct jit_state *state, char **errmsg)
             emit_cmp(state, src, dst);
             emit_jcc(state, 0x8e, target_pc);
             break;
-        case EBPF_OP_CALL:
+        case EBPF_OP_CALL: {
+            void * target;
+            if (vm->helper_resolver) {
+                target = (void*)vm->helper_resolver(vm->helper_resolver_context, inst.imm);
+            } else {
+                target = vm->ext_funcs[inst.imm];
+            }
+            if (target == NULL) {
+                *errmsg = ubpf_error("Helper function missing for %d", inst.imm);
+                return -1;
+            }
             /* We reserve RCX for shifts */
             emit_mov(state, R9, RCX);
-            emit_call(state, vm->ext_funcs[inst.imm]);
+            emit_call(state, target);
             break;
+        }
         case EBPF_OP_EXIT:
             if (i != vm->num_insts - 1) {
                 emit_jmp(state, TARGET_PC_EXIT);

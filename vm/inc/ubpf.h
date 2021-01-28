@@ -35,6 +35,7 @@ struct ubpf_map_def {
 
 typedef uint64_t (*ubpf_map_create_fn)(void *context, const struct ubpf_map_def * map_def);
 typedef uint64_t (*ubpf_map_resolver_fn)(void *context, uint64_t fd);
+typedef uint64_t (*ubpf_helper_resolver_fn)(void * context, uint32_t helper);
 
 struct ubpf_vm *ubpf_create(void);
 void ubpf_destroy(struct ubpf_vm *vm);
@@ -69,6 +70,16 @@ int ubpf_register(struct ubpf_vm *vm, unsigned int idx, const char *name, void *
  * Returns 0 on sucess, -1 on error.
  */
 int ubpf_register_map_create(struct ubpf_vm *vm, void *context, ubpf_map_create_fn create_fn);
+
+/*
+ * Register a function used to resolve helper function addresses.
+ *
+ * When processing a EBPF_OP_CALL instruction, lookup the helper 
+ * address.
+ *
+ * Returns 0 on sucess, -1 on error.
+ */
+int ubpf_register_helper_resolver(struct ubpf_vm *vm, void *context, ubpf_helper_resolver_fn resolver_fn);
 
 /*
  * Register a function used to resolve map FD to address.

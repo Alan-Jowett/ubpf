@@ -107,6 +107,17 @@ int ubpf_register_map_resolver(struct ubpf_vm *vm, void *context, ubpf_map_resol
     return 0;
 }
 
+int ubpf_register_helper_resolver(struct ubpf_vm *vm, void *context, ubpf_helper_resolver_fn resolver_fn)
+{
+    if (vm->helper_resolver != NULL) {
+        return -1;
+    }
+
+    vm->helper_resolver = resolver_fn;
+    vm->helper_resolver_context = context;
+    return 0;
+}
+
 unsigned int
 ubpf_lookup_registered_function(struct ubpf_vm *vm, const char *name)
 {
@@ -594,9 +605,21 @@ ubpf_exec(const struct ubpf_vm *vm, void *mem, size_t mem_len)
             break;
         case EBPF_OP_EXIT:
             return reg[0];
-        case EBPF_OP_CALL:
-            reg[0] = vm->ext_funcs[inst.imm](reg[1], reg[2], reg[3], reg[4], reg[5]);
+        case EBPF_OP_CALL: {
+            ext_func target;
+            if (vm->helper_resolver) {
+                target = (ext_func)vm->helper_resolver(vm->helper_resolver_context, inst.imm);
+            } else {
+                target = vm->ext_funcs[inst.imm];
+            }
+            if (target == NULL) {
+                fprintf(stderr, "Helper function missing for %d", inst.imm);
+                return UINT64_MAX;
+            }
+
+            reg[0] = target(reg[1], reg[2], reg[3], reg[4], reg[5]);
             break;
+        }
         }
     }
 }
