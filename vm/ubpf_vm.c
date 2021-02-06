@@ -763,7 +763,7 @@ validate(const struct ubpf_vm *vm, const struct ebpf_inst *insts, uint32_t num_i
                 *errmsg = ubpf_error("invalid call immediate at PC %d", i);
                 return false;
             }
-            if (!vm->ext_funcs[inst.imm]) {
+            if (!vm->helper_resolver && !vm->ext_funcs[inst.imm]) {
                 *errmsg = ubpf_error("call to nonexistent function %u at PC %d", inst.imm, i);
                 return false;
             }
