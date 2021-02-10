@@ -36,6 +36,36 @@
 static void muldivmod(struct jit_state *state, uint16_t pc, uint8_t opcode, int src, int dst, int32_t imm);
 
 #define REGISTER_MAP_SIZE 11
+
+#if defined(_WIN32)
+static int platform_nonvolatile_registers[] = {
+    RBP, RBX, RDI, RSI, R12, R13, R14, R15
+};
+static int platform_parameter_registers[] = {
+    RCX, RDX, R8, R9
+};
+#define RCX_ALT R15
+static int register_map[REGISTER_MAP_SIZE] = {
+    RAX,
+    R15,
+    RDX,
+    R8,
+    R9,
+    R10,
+    R11,
+    R12,
+    R13,
+    R14,
+    RBP,
+};
+#else
+#define RCX_ALT R9
+static int platform_nonvolatile_registers[] = {
+    RBP, RBX, R13, R14, R15
+};
+static int platform_parameter_registers[] = {
+    RDI, RSI, RDX, RCX, R8, R9
+};
 static int register_map[REGISTER_MAP_SIZE] = {
     RAX,
     RDI,
@@ -49,6 +79,10 @@ static int register_map[REGISTER_MAP_SIZE] = {
     R15,
     RBP,
 };
+
+#endif
+
+
 
 /* Return the x86 register for the given eBPF register */
 static int
@@ -86,15 +120,17 @@ ubpf_set_register_offset(int x)
 static int
 translate(struct ubpf_vm *vm, struct jit_state *state, char **errmsg)
 {
-    emit_push(state, RBP);
-    emit_push(state, RBX);
-    emit_push(state, R13);
-    emit_push(state, R14);
-    emit_push(state, R15);
+    int i;
 
-    /* Move rdi into register 1 */
-    if (map_register(1) != RDI) {
-        emit_mov(state, RDI, map_register(1));
+    // Save platform non-volatile registers
+    for (i = 0; i < _countof(platform_nonvolatile_registers); i++)
+    {
+        emit_push(state, platform_nonvolatile_registers[i]);
+    }
+
+    /* Move first platform paramter register into register 1 */
+    if (map_register(1) != platform_parameter_registers[0]) {
+        emit_mov(state, platform_parameter_registers[0], map_register(1));
     }
 
     /* Copy stack pointer to R10 */
@@ -103,7 +139,6 @@ translate(struct ubpf_vm *vm, struct jit_state *state, char **errmsg)
     /* Allocate stack space */
     emit_alu64_imm32(state, 0x81, 5, RSP, STACK_SIZE);
 
-    int i;
     for (i = 0; i < vm->num_insts; i++) {
         struct ebpf_inst inst = vm->insts[i];
         state->pc_locs[i] = state->offset;
@@ -373,7 +408,7 @@ translate(struct ubpf_vm *vm, struct jit_state *state, char **errmsg)
                 return -1;
             }
             /* We reserve RCX for shifts */
-            emit_mov(state, R9, RCX);
+            emit_mov(state, RCX_ALT, RCX);
             emit_call(state, target);
             break;
         }
@@ -459,11 +494,11 @@ translate(struct ubpf_vm *vm, struct jit_state *state, char **errmsg)
     /* Deallocate stack space */
     emit_alu64_imm32(state, 0x81, 0, RSP, STACK_SIZE);
 
-    emit_pop(state, R15);
-    emit_pop(state, R14);
-    emit_pop(state, R13);
-    emit_pop(state, RBX);
-    emit_pop(state, RBP);
+    // Restore platform non-volatile registers
+    for (i = 0; i < _countof(platform_nonvolatile_registers); i++)
+    {
+        emit_pop(state, platform_nonvolatile_registers[_countof(platform_nonvolatile_registers) - i - 1]);
+    }
 
     emit1(state, 0xc3); /* ret */
 
