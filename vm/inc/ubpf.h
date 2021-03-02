@@ -17,7 +17,9 @@
 #ifndef UBPF_H
 #define UBPF_H
 
+#if !defined(_WIN32)
 #include <stdint.h>
+#endif
 #include <stddef.h>
 
 struct ubpf_vm;
@@ -123,10 +125,10 @@ int ubpf_load(struct ubpf_vm *vm, const void *code, uint32_t code_len, char **er
  */
 int ubpf_load_elf(struct ubpf_vm *vm, const void *elf, size_t elf_len, char **errmsg);
 
-int ubpf_load_elf_by_name(struct ubpf_vm *vm, const void *elf, size_t elf_len, const char * name, char **errmsg);
+int ubpf_load_elf_by_name(struct ubpf_vm *vm, const void *elf, size_t elf_len, const char *name, char **errmsg);
 
 
-uint64_t ubpf_exec(const struct ubpf_vm *vm, void *mem, size_t mem_len);
+uint64_t ubpf_exec(const struct ubpf_vm *vm, void *mem, size_t mem_len, char **errmsg);
 
 ubpf_jit_fn ubpf_compile(struct ubpf_vm *vm, char **errmsg);
 

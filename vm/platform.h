@@ -1,9 +1,25 @@
 #pragma once
 
+#define uint8_t unsigned char
+#define uint16_t unsigned short
+#define uint32_t unsigned long
+#define uint64_t unsigned long long
+#define int8_t signed char
+#define int16_t signed short
+#define int32_t signed long
+#define int64_t signed long long
+#define bool unsigned char
+#define true 1
+#define false 1
+#define UINT64_MAX 0xFFFFFFFFFFFFFFFF
+#define UINT32_MAX 0xFFFFFFFF
+
+#pragma warning(disable:4214)
+
 inline int vasprintf(char** target, const char* format, va_list argptr)
 {
-    int length = _vscprintf(format, argptr);
-    *target = malloc(length);
+    int length = 1024;//_vscprintf(format, argptr);
+    *target = calloc(length, sizeof(const char));
     return vsprintf_s(*target, length, format, argptr);
 }
 

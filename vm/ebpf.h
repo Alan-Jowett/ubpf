@@ -17,7 +17,9 @@
 #ifndef EBPF_H
 #define EBPF_H
 
+#if !defined(_WIN32)
 #include <stdint.h>
+#endif
 
 /* eBPF definitions */
 
