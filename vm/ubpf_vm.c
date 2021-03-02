@@ -30,7 +30,7 @@
 #define MAX_EXT_FUNCS 64
 
 static bool validate(const struct ubpf_vm *vm, const struct ebpf_inst *insts, uint32_t num_insts, char **errmsg);
-static bool bounds_check(const struct ubpf_vm *vm, void *addr, int size, const char *type, uint16_t cur_pc, void *mem, size_t mem_len, void *stack);
+static bool bounds_check(const struct ubpf_vm *vm, uint8_t*addr, int size, const char *type, uint16_t cur_pc, uint8_t*mem, size_t mem_len, uint8_t*stack);
 
 bool toggle_bounds_check(struct ubpf_vm *vm, bool enable)
 {
@@ -172,7 +172,6 @@ u32(uint64_t x)
     return x;
 }
 
-#if !defined(_WIN32)
 uint64_t
 ubpf_exec(const struct ubpf_vm *vm, void *mem, size_t mem_len)
 {
@@ -263,7 +262,7 @@ ubpf_exec(const struct ubpf_vm *vm, void *mem, size_t mem_len)
             reg[inst.dst] &= UINT32_MAX;
             break;
         case EBPF_OP_NEG:
-            reg[inst.dst] = -reg[inst.dst];
+            reg[inst.dst] = -(int64_t)reg[inst.dst];
             reg[inst.dst] &= UINT32_MAX;
             break;
         case EBPF_OP_MOD_IMM:
@@ -375,7 +374,7 @@ ubpf_exec(const struct ubpf_vm *vm, void *mem, size_t mem_len)
             reg[inst.dst] >>= reg[inst.src];
             break;
         case EBPF_OP_NEG64:
-            reg[inst.dst] = -reg[inst.dst];
+            reg[inst.dst] = -(int64_t)reg[inst.dst];
             break;
         case EBPF_OP_MOD64_IMM:
             reg[inst.dst] %= inst.imm;
@@ -413,13 +412,13 @@ ubpf_exec(const struct ubpf_vm *vm, void *mem, size_t mem_len)
          */
 #define BOUNDS_CHECK_LOAD(size) \
     do { \
-        if (!bounds_check(vm, (void *)reg[inst.src] + inst.offset, size, "load", cur_pc, mem, mem_len, stack)) { \
+        if (!bounds_check(vm, (uint8_t*)reg[inst.src] + inst.offset, size, "load", cur_pc, mem, mem_len, stack)) { \
             return UINT64_MAX; \
         } \
     } while (0)
 #define BOUNDS_CHECK_STORE(size) \
     do { \
-        if (!bounds_check(vm, (void *)reg[inst.dst] + inst.offset, size, "store", cur_pc, mem, mem_len, stack)) { \
+        if (!bounds_check(vm, (uint8_t*)reg[inst.dst] + inst.offset, size, "store", cur_pc, mem, mem_len, stack)) { \
             return UINT64_MAX; \
         } \
     } while (0)
@@ -628,7 +627,6 @@ ubpf_exec(const struct ubpf_vm *vm, void *mem, size_t mem_len)
         }
     }
 }
-#endif
 
 static bool
 validate(const struct ubpf_vm *vm, const struct ebpf_inst *insts, uint32_t num_insts, char **errmsg)
@@ -807,9 +805,8 @@ validate(const struct ubpf_vm *vm, const struct ebpf_inst *insts, uint32_t num_i
     return true;
 }
 
-#if !defined(_WIN32)
 static bool
-bounds_check(const struct ubpf_vm *vm, void *addr, int size, const char *type, uint16_t cur_pc, void *mem, size_t mem_len, void *stack)
+bounds_check(const struct ubpf_vm *vm, uint8_t *addr, int size, const char *type, uint16_t cur_pc, uint8_t *mem, size_t mem_len, uint8_t *stack)
 {
     if (!vm->bounds_check_enabled)
         return true;
@@ -825,7 +822,6 @@ bounds_check(const struct ubpf_vm *vm, void *addr, int size, const char *type, u
         return false;
     }
 }
-#endif
 
 char *
 ubpf_error(const char *fmt, ...)
