@@ -18,12 +18,12 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #if !defined(_WIN32)
 #include <unistd.h>
 #include <sys/mman.h>
-#endif
+#include <stdbool.h>
 #include <inttypes.h>
+#endif
 #include <errno.h>
 #include <assert.h>
 #include "ubpf_int.h"

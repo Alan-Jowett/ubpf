@@ -22,7 +22,6 @@
 #define UBPF_JIT_X86_64_H
 
 #include <assert.h>
-#include <stdint.h>
 #include <string.h>
 
 #define RAX 0

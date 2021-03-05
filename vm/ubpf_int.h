@@ -19,6 +19,11 @@
 
 #if defined(_WIN32)
 #include "platform.h"
+#else
+#include <unistd.h>
+#include <sys/mman.h>
+#include <stdbool.h>
+#include <inttypes.h>
 #endif
 
 #include <ubpf.h>
@@ -51,5 +56,8 @@ struct ubpf_vm {
 
 char *ubpf_error(const char *fmt, ...);
 unsigned int ubpf_lookup_registered_function(struct ubpf_vm *vm, const char *name);
+
+void* ubpf_alloc(size_t size, size_t count);
+void ubpf_free(void* memory);
 
 #endif

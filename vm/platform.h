@@ -1,5 +1,6 @@
 #pragma once
 
+#if defined(NTDDI_VERSION)
 #define uint8_t unsigned char
 #define uint16_t unsigned short
 #define uint32_t unsigned long
@@ -13,15 +14,16 @@
 #define false 1
 #define UINT64_MAX 0xFFFFFFFFFFFFFFFF
 #define UINT32_MAX 0xFFFFFFFF
+#define INT32_MIN 0x80000000
+#define INT32_MAX 0x7FFFFFFF
+#else
+#include <stdint.h>
+#include <stdbool.h>
+#endif
 
 #pragma warning(disable:4214)
 
-inline int vasprintf(char** target, const char* format, va_list argptr)
-{
-    int length = 1024;//_vscprintf(format, argptr);
-    *target = calloc(length, sizeof(const char));
-    return vsprintf_s(*target, length, format, argptr);
-}
+int vasprintf(char** target, const char* format, va_list argptr);
 
 #define htobe16(X) swap16(X)
 #define htobe32(X) swap32(X)
@@ -44,3 +46,4 @@ inline uint64_t swap64(uint64_t value)
 {
     return swap32(value >> 32) | ((uint64_t)swap32(value & ((1ull << 32ull) - 1))) << 32;
 }
+

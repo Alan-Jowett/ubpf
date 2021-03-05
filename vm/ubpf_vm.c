@@ -42,18 +42,18 @@ bool toggle_bounds_check(struct ubpf_vm *vm, bool enable)
 struct ubpf_vm *
 ubpf_create(void)
 {
-    struct ubpf_vm *vm = calloc(1, sizeof(*vm));
+    struct ubpf_vm *vm = ubpf_alloc(1, sizeof(*vm));
     if (vm == NULL) {
         return NULL;
     }
 
-    vm->ext_funcs = calloc(MAX_EXT_FUNCS, sizeof(*vm->ext_funcs));
+    vm->ext_funcs = ubpf_alloc(MAX_EXT_FUNCS, sizeof(*vm->ext_funcs));
     if (vm->ext_funcs == NULL) {
         ubpf_destroy(vm);
         return NULL;
     }
 
-    vm->ext_func_names = calloc(MAX_EXT_FUNCS, sizeof(*vm->ext_func_names));
+    vm->ext_func_names = ubpf_alloc(MAX_EXT_FUNCS, sizeof(*vm->ext_func_names));
     if (vm->ext_func_names == NULL) {
         ubpf_destroy(vm);
         return NULL;
@@ -71,10 +71,10 @@ ubpf_destroy(struct ubpf_vm *vm)
         munmap(vm->jitted, vm->jitted_size);
 #endif
     }
-    free(vm->insts);
-    free(vm->ext_funcs);
-    free((void*)vm->ext_func_names);
-    free(vm);
+    ubpf_free(vm->insts);
+    ubpf_free(vm->ext_funcs);
+    ubpf_free((void*)vm->ext_func_names);
+    ubpf_free(vm);
 }
 
 int
@@ -154,7 +154,7 @@ ubpf_load(struct ubpf_vm *vm, const void *code, uint32_t code_len, char **errmsg
         return -1;
     }
 
-    vm->insts = calloc(code_len, sizeof(uint8_t));
+    vm->insts = ubpf_alloc(code_len, sizeof(uint8_t));
     if (vm->insts == NULL) {
         *errmsg = ubpf_error("out of memory");
         return -1;
