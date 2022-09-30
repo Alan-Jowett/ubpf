@@ -63,7 +63,8 @@ jobs:
         sudo apt-get install -y \
           ccache \
           ninja-build \
-          cmake
+          cmake \
+          lcov
 
         if [[ "${{ inputs.scan_build }}" == "true" ]] ; then
           sudo apt-get install -y \
@@ -76,7 +77,8 @@ jobs:
         brew install \
           cmake \
           ninja \
-          ccache
+          ccache \
+          lcov
 
     - name: Configure the project
       run: |
@@ -92,8 +94,8 @@ jobs:
           -S . \
           -B build \
           -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} \
-          -DUBPF_ENABLE_COVERAGE=${{ inputs.enable_sanitizers }} \
-          -DUBPF_ENABLE_SANITIZERS=${{ inputs.enable_coverage }} \
+          -DUBPF_ENABLE_COVERAGE=${{ inputs.enable_coverage }} \
+          -DUBPF_ENABLE_SANITIZERS=${{ inputs.enable_sanitizers }} \
           -DUBPF_ENABLE_TESTS=true \
           -DUBPF_ENABLE_INSTALL=true
 
@@ -123,6 +125,20 @@ jobs:
           --build build \
           --target test \
           -- -v
+
+    - name: Generate code coverage report
+      if: inputs.enable_coverage == true
+      run: |
+        mkdir -p coverage
+        lcov --capture --directory build --include '*' --output-file coverage/lcov.info
+
+    - name: Coveralls Parallel
+      if: inputs.enable_coverage == true
+      uses: coverallsapp/github-action@v1.1.2
+      with:
+        github-token: ${{ secrets.github_token }}
+        flag-name: run-${{inputs.build_type}}-${{inputs.platform}}
+        parallel: true
 
     - name: Run the install target
       run: |
