@@ -13,25 +13,6 @@ extern "C"
 #include "ubpf.h"
 }
 
-std::map<std::string, std::string> unsupported_tests {
-#if defined(__aarch64__)
-    {"mod-by-zero-reg.data", "JIT"},
-    {"div-by-zero-reg.data", "JIT"},
-    {"div-by-zero-imm.data", "JIT"},
-    {"mod-by-zero-reg.data", "JIT"},
-    {"mod-by-zero-reg.data", "JIT"},
-    { "mod-by-zero-reg.data", "JIT"}, 
-    {"div-by-zero-reg.data", "JIT"}, 
-    {"div-by-zero-imm.data", "JIT"}, 
-    {"div64-by-zero-imm.data", "JIT"}, 
-    {"mod64-by-zero-imm.data", "JIT"}, 
-    {"mod-by-zero-imm.data", "JIT"}, 
-    {"div64-by-zero-reg.data", "JIT"}, 
-    {"mod64-by-zero-reg.data", "JIT"}, 
-#else
-#endif
-};
-
 std::tuple<std::vector<uint8_t>, uint64_t, std::string, std::vector<ebpf_inst>>
 parse_test_file(const std::filesystem::path &data_file)
 {
@@ -201,14 +182,6 @@ prepare_ubpf_vm(const std::vector<ebpf_inst> instructions, const std::string& ex
 
 void run_ubpf_jit_test(const std::filesystem::path &data_file)
 {
-    auto unsupported = unsupported_tests.find(data_file.filename().string());
-    if (unsupported != unsupported_tests.end() && unsupported->second == "JIT")
-    {
-        std::cout << "Skipping " << data_file << " because it is unsupported on " << unsupported->second << std::endl;
-        GTEST_SKIP();
-        return;
-    }
-
     auto [mem, expected_result, expected_error, instructions] = parse_test_file(data_file);
     if (instructions.empty())
     {
@@ -238,14 +211,6 @@ void run_ubpf_jit_test(const std::filesystem::path &data_file)
 
 void run_ubpf_interpret_test(const std::filesystem::path &data_file)
 {
-    auto unsupported = unsupported_tests.find(data_file.filename().string());
-    if (unsupported != unsupported_tests.end() && unsupported->second == "INTERPRET")
-    {
-        std::cout << "Skipping " << data_file << " because it is unsupported on " << unsupported->second << std::endl;
-        GTEST_SKIP();
-        return;
-    }
-
     auto [mem, expected_result, expected_error, instructions] = parse_test_file(data_file);
     if (instructions.empty())
     {
