@@ -73,9 +73,9 @@ ubpf_create(void)
     vm->bounds_check_enabled = true;
     vm->error_printf = fprintf;
 
-#if __x86_64__
+#if defined(__x86_64__) || defined(_M_X64)
     vm->translate = ubpf_translate_x86_64;
-#elif __aarch64__
+#elif defined(__aarch64__) || defined(_M_ARM64)
     vm->translate = ubpf_translate_arm64;
 #else
     vm->translate = ubpf_translate_null;
@@ -700,6 +700,10 @@ validate(const struct ubpf_vm *vm, const struct ebpf_inst *insts, uint32_t num_i
             break;
 
         case EBPF_OP_LDDW:
+            if (inst.src != 0) {
+                *errmsg = ubpf_error("invalid source register for LDDW at PC %d", i);
+                return false;
+            }
             if (i + 1 >= num_insts || insts[i+1].opcode != 0) {
                 *errmsg = ubpf_error("incomplete lddw at PC %d", i);
                 return false;
