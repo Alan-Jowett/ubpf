@@ -105,62 +105,77 @@ $(function() {
 <div class="line"><a name="l00040"></a><span class="lineno">   40</span>&#160; </div>
 <div class="line"><a name="l00044"></a><span class="lineno">   44</span>&#160;<span class="keyword">struct </span>ubpf_vm;</div>
 <div class="line"><a name="l00045"></a><span class="lineno">   45</span>&#160; </div>
-<div class="line"><a name="l00049"></a><span class="lineno"><a class="line" href="ubpf_8h.html#a6334115c4408267ec35087ade6128fa0">   49</a></span>&#160;<span class="keyword">typedef</span> uint64_t (*<a class="code" href="ubpf_8h.html#a6334115c4408267ec35087ade6128fa0">ubpf_jit_fn</a>)(<span class="keywordtype">void</span> *mem, <span class="keywordtype">size_t</span> mem_len);</div>
+<div class="line"><a name="l00049"></a><span class="lineno"><a class="line" href="ubpf_8h.html#a6334115c4408267ec35087ade6128fa0">   49</a></span>&#160;<span class="keyword">typedef</span> uint64_t (*<a class="code" href="ubpf_8h.html#a6334115c4408267ec35087ade6128fa0">ubpf_jit_fn</a>)(<span class="keywordtype">void</span>* mem, <span class="keywordtype">size_t</span> mem_len);</div>
 <div class="line"><a name="l00050"></a><span class="lineno">   50</span>&#160; </div>
-<div class="line"><a name="l00056"></a><span class="lineno">   56</span>&#160;<span class="keyword">struct </span>ubpf_vm *<a class="code" href="ubpf_8h.html#a845988047e3c2fe9713e2f8a404d0751">ubpf_create</a>(<span class="keywordtype">void</span>);</div>
-<div class="line"><a name="l00057"></a><span class="lineno">   57</span>&#160; </div>
-<div class="line"><a name="l00063"></a><span class="lineno">   63</span>&#160;<span class="keywordtype">void</span> <a class="code" href="ubpf_8h.html#ae69dfc8e94c60e15a5db25fb6316274f">ubpf_destroy</a>(<span class="keyword">struct</span> ubpf_vm *vm);</div>
-<div class="line"><a name="l00064"></a><span class="lineno">   64</span>&#160; </div>
-<div class="line"><a name="l00072"></a><span class="lineno">   72</span>&#160;<span class="keywordtype">bool</span> <a class="code" href="ubpf_8h.html#a80938918080712ac0667359fd163f1a5">ubpf_toggle_bounds_check</a>(<span class="keyword">struct</span> ubpf_vm *vm, <span class="keywordtype">bool</span> enable);</div>
-<div class="line"><a name="l00073"></a><span class="lineno">   73</span>&#160; </div>
-<div class="line"><a name="l00080"></a><span class="lineno">   80</span>&#160;<span class="keywordtype">void</span> <a class="code" href="ubpf_8h.html#ae7e25aeeb15d5dc04a58f99239c4774c">ubpf_set_error_print</a>(<span class="keyword">struct</span> ubpf_vm *vm, <span class="keywordtype">int</span> (*error_printf)(FILE *stream, <span class="keyword">const</span> <span class="keywordtype">char</span> *format, ...));</div>
-<div class="line"><a name="l00081"></a><span class="lineno">   81</span>&#160; </div>
-<div class="line"><a name="l00095"></a><span class="lineno">   95</span>&#160;<span class="keywordtype">int</span> <a class="code" href="ubpf_8h.html#af1849510fba48e825d754eeeb63367ac">ubpf_register</a>(<span class="keyword">struct</span> ubpf_vm *vm, <span class="keywordtype">unsigned</span> <span class="keywordtype">int</span> index, <span class="keyword">const</span> <span class="keywordtype">char</span> *name, <span class="keywordtype">void</span> *fn);</div>
-<div class="line"><a name="l00096"></a><span class="lineno">   96</span>&#160; </div>
-<div class="line"><a name="l00112"></a><span class="lineno">  112</span>&#160;<span class="keywordtype">int</span> <a class="code" href="ubpf_8h.html#a8d32748c100c98d69dba8dcf0e9d4d0d">ubpf_load</a>(<span class="keyword">struct</span> ubpf_vm *vm, <span class="keyword">const</span> <span class="keywordtype">void</span> *code, uint32_t code_len, <span class="keywordtype">char</span> **errmsg);</div>
-<div class="line"><a name="l00113"></a><span class="lineno">  113</span>&#160; </div>
-<div class="line"><a name="l00114"></a><span class="lineno">  114</span>&#160;<span class="comment">/*</span></div>
-<div class="line"><a name="l00115"></a><span class="lineno">  115</span>&#160;<span class="comment"> * Unload code from a VM</span></div>
-<div class="line"><a name="l00116"></a><span class="lineno">  116</span>&#160;<span class="comment"> *</span></div>
-<div class="line"><a name="l00117"></a><span class="lineno">  117</span>&#160;<span class="comment"> * This must be done before calling ubpf_load or ubpf_load_elf, except for the</span></div>
-<div class="line"><a name="l00118"></a><span class="lineno">  118</span>&#160;<span class="comment"> * first time those functions are called. It clears the VM instructions to</span></div>
-<div class="line"><a name="l00119"></a><span class="lineno">  119</span>&#160;<span class="comment"> * allow for new code to be loaded.</span></div>
-<div class="line"><a name="l00120"></a><span class="lineno">  120</span>&#160;<span class="comment"> *</span></div>
-<div class="line"><a name="l00121"></a><span class="lineno">  121</span>&#160;<span class="comment"> * It does not unregister any external functions.</span></div>
-<div class="line"><a name="l00122"></a><span class="lineno">  122</span>&#160;<span class="comment"> */</span></div>
-<div class="line"><a name="l00123"></a><span class="lineno">  123</span>&#160; </div>
-<div class="line"><a name="l00131"></a><span class="lineno">  131</span>&#160;<span class="keywordtype">void</span> <a class="code" href="ubpf_8h.html#ae95b334d7eeb18072da3b9f4eeb66c25">ubpf_unload_code</a>(<span class="keyword">struct</span> ubpf_vm *vm);</div>
-<div class="line"><a name="l00132"></a><span class="lineno">  132</span>&#160; </div>
-<div class="line"><a name="l00133"></a><span class="lineno">  133</span>&#160;<span class="preprocessor">#if defined(UBPF_HAS_ELF_H)</span></div>
-<div class="line"><a name="l00134"></a><span class="lineno">  134</span>&#160; </div>
-<div class="line"><a name="l00154"></a><span class="lineno">  154</span>&#160;<span class="keywordtype">int</span> ubpf_load_elf(<span class="keyword">struct</span> ubpf_vm *vm, <span class="keyword">const</span> <span class="keywordtype">void</span> *elf, <span class="keywordtype">size_t</span> elf_len, <span class="keywordtype">char</span> **errmsg);</div>
-<div class="line"><a name="l00155"></a><span class="lineno">  155</span>&#160;<span class="preprocessor">#endif</span></div>
-<div class="line"><a name="l00156"></a><span class="lineno">  156</span>&#160; </div>
-<div class="line"><a name="l00170"></a><span class="lineno">  170</span>&#160;<span class="keywordtype">int</span> <a class="code" href="ubpf_8h.html#a1ce3eb22d45ec43436758a139ffc8c95">ubpf_exec</a>(<span class="keyword">const</span> <span class="keyword">struct</span> ubpf_vm *vm, <span class="keywordtype">void</span> *mem, <span class="keywordtype">size_t</span> mem_len, uint64_t *bpf_return_value);</div>
-<div class="line"><a name="l00171"></a><span class="lineno">  171</span>&#160; </div>
-<div class="line"><a name="l00182"></a><span class="lineno">  182</span>&#160;<a class="code" href="ubpf_8h.html#a6334115c4408267ec35087ade6128fa0">ubpf_jit_fn</a> <a class="code" href="ubpf_8h.html#a67b901bf6d169b6b28f818f15bd17cba">ubpf_compile</a>(<span class="keyword">struct</span> ubpf_vm *vm, <span class="keywordtype">char</span> **errmsg);</div>
-<div class="line"><a name="l00183"></a><span class="lineno">  183</span>&#160; </div>
-<div class="line"><a name="l00184"></a><span class="lineno">  184</span>&#160;<span class="comment">/*</span></div>
-<div class="line"><a name="l00185"></a><span class="lineno">  185</span>&#160;<span class="comment"> * Translate the eBPF byte code to x64 machine code, store in buffer, and</span></div>
-<div class="line"><a name="l00186"></a><span class="lineno">  186</span>&#160;<span class="comment"> * write the resulting count of bytes to size.</span></div>
-<div class="line"><a name="l00187"></a><span class="lineno">  187</span>&#160;<span class="comment"> *</span></div>
-<div class="line"><a name="l00188"></a><span class="lineno">  188</span>&#160;<span class="comment"> * This must be called after registering all functions.</span></div>
-<div class="line"><a name="l00189"></a><span class="lineno">  189</span>&#160;<span class="comment"> *</span></div>
-<div class="line"><a name="l00190"></a><span class="lineno">  190</span>&#160;<span class="comment"> * Returns 0 on success, -1 on error. In case of error a pointer to the error</span></div>
-<div class="line"><a name="l00191"></a><span class="lineno">  191</span>&#160;<span class="comment"> * message will be stored in &#39;errmsg&#39; and should be freed by the caller.</span></div>
-<div class="line"><a name="l00192"></a><span class="lineno">  192</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00056"></a><span class="lineno">   56</span>&#160;<span class="keyword">struct </span>ubpf_vm*</div>
+<div class="line"><a name="l00057"></a><span class="lineno">   57</span>&#160;<a class="code" href="ubpf_8h.html#a845988047e3c2fe9713e2f8a404d0751">ubpf_create</a>(<span class="keywordtype">void</span>);</div>
+<div class="line"><a name="l00058"></a><span class="lineno">   58</span>&#160; </div>
+<div class="line"><a name="l00064"></a><span class="lineno">   64</span>&#160;<span class="keywordtype">void</span></div>
+<div class="line"><a name="l00065"></a><span class="lineno">   65</span>&#160;<a class="code" href="ubpf_8h.html#ae69dfc8e94c60e15a5db25fb6316274f">ubpf_destroy</a>(<span class="keyword">struct</span> ubpf_vm* vm);</div>
+<div class="line"><a name="l00066"></a><span class="lineno">   66</span>&#160; </div>
+<div class="line"><a name="l00074"></a><span class="lineno">   74</span>&#160;<span class="keywordtype">bool</span></div>
+<div class="line"><a name="l00075"></a><span class="lineno">   75</span>&#160;<a class="code" href="ubpf_8h.html#a80938918080712ac0667359fd163f1a5">ubpf_toggle_bounds_check</a>(<span class="keyword">struct</span> ubpf_vm* vm, <span class="keywordtype">bool</span> enable);</div>
+<div class="line"><a name="l00076"></a><span class="lineno">   76</span>&#160; </div>
+<div class="line"><a name="l00083"></a><span class="lineno">   83</span>&#160;<span class="keywordtype">void</span></div>
+<div class="line"><a name="l00084"></a><span class="lineno">   84</span>&#160;<a class="code" href="ubpf_8h.html#ae7e25aeeb15d5dc04a58f99239c4774c">ubpf_set_error_print</a>(<span class="keyword">struct</span> ubpf_vm* vm, <span class="keywordtype">int</span> (*error_printf)(FILE* stream, <span class="keyword">const</span> <span class="keywordtype">char</span>* format, ...));</div>
+<div class="line"><a name="l00085"></a><span class="lineno">   85</span>&#160; </div>
+<div class="line"><a name="l00099"></a><span class="lineno">   99</span>&#160;<span class="keywordtype">int</span></div>
+<div class="line"><a name="l00100"></a><span class="lineno">  100</span>&#160;<a class="code" href="ubpf_8h.html#af1849510fba48e825d754eeeb63367ac">ubpf_register</a>(<span class="keyword">struct</span> ubpf_vm* vm, <span class="keywordtype">unsigned</span> <span class="keywordtype">int</span> index, <span class="keyword">const</span> <span class="keywordtype">char</span>* name, <span class="keywordtype">void</span>* fn);</div>
+<div class="line"><a name="l00101"></a><span class="lineno">  101</span>&#160; </div>
+<div class="line"><a name="l00117"></a><span class="lineno">  117</span>&#160;<span class="keywordtype">int</span></div>
+<div class="line"><a name="l00118"></a><span class="lineno">  118</span>&#160;<a class="code" href="ubpf_8h.html#a8d32748c100c98d69dba8dcf0e9d4d0d">ubpf_load</a>(<span class="keyword">struct</span> ubpf_vm* vm, <span class="keyword">const</span> <span class="keywordtype">void</span>* code, uint32_t code_len, <span class="keywordtype">char</span>** errmsg);</div>
+<div class="line"><a name="l00119"></a><span class="lineno">  119</span>&#160; </div>
+<div class="line"><a name="l00120"></a><span class="lineno">  120</span>&#160;<span class="comment">/*</span></div>
+<div class="line"><a name="l00121"></a><span class="lineno">  121</span>&#160;<span class="comment"> * Unload code from a VM</span></div>
+<div class="line"><a name="l00122"></a><span class="lineno">  122</span>&#160;<span class="comment"> *</span></div>
+<div class="line"><a name="l00123"></a><span class="lineno">  123</span>&#160;<span class="comment"> * This must be done before calling ubpf_load or ubpf_load_elf, except for the</span></div>
+<div class="line"><a name="l00124"></a><span class="lineno">  124</span>&#160;<span class="comment"> * first time those functions are called. It clears the VM instructions to</span></div>
+<div class="line"><a name="l00125"></a><span class="lineno">  125</span>&#160;<span class="comment"> * allow for new code to be loaded.</span></div>
+<div class="line"><a name="l00126"></a><span class="lineno">  126</span>&#160;<span class="comment"> *</span></div>
+<div class="line"><a name="l00127"></a><span class="lineno">  127</span>&#160;<span class="comment"> * It does not unregister any external functions.</span></div>
+<div class="line"><a name="l00128"></a><span class="lineno">  128</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00129"></a><span class="lineno">  129</span>&#160; </div>
+<div class="line"><a name="l00137"></a><span class="lineno">  137</span>&#160;<span class="keywordtype">void</span></div>
+<div class="line"><a name="l00138"></a><span class="lineno">  138</span>&#160;<a class="code" href="ubpf_8h.html#ae95b334d7eeb18072da3b9f4eeb66c25">ubpf_unload_code</a>(<span class="keyword">struct</span> ubpf_vm* vm);</div>
+<div class="line"><a name="l00139"></a><span class="lineno">  139</span>&#160; </div>
+<div class="line"><a name="l00140"></a><span class="lineno">  140</span>&#160;<span class="preprocessor">#if defined(UBPF_HAS_ELF_H)</span></div>
+<div class="line"><a name="l00141"></a><span class="lineno">  141</span>&#160; </div>
+<div class="line"><a name="l00161"></a><span class="lineno">  161</span>&#160;<span class="keywordtype">int</span></div>
+<div class="line"><a name="l00162"></a><span class="lineno">  162</span>&#160;ubpf_load_elf(<span class="keyword">struct</span> ubpf_vm* vm, <span class="keyword">const</span> <span class="keywordtype">void</span>* elf, <span class="keywordtype">size_t</span> elf_len, <span class="keywordtype">char</span>** errmsg);</div>
+<div class="line"><a name="l00163"></a><span class="lineno">  163</span>&#160;<span class="preprocessor">#endif</span></div>
+<div class="line"><a name="l00164"></a><span class="lineno">  164</span>&#160; </div>
+<div class="line"><a name="l00178"></a><span class="lineno">  178</span>&#160;<span class="keywordtype">int</span></div>
+<div class="line"><a name="l00179"></a><span class="lineno">  179</span>&#160;<a class="code" href="ubpf_8h.html#a1ce3eb22d45ec43436758a139ffc8c95">ubpf_exec</a>(<span class="keyword">const</span> <span class="keyword">struct</span> ubpf_vm* vm, <span class="keywordtype">void</span>* mem, <span class="keywordtype">size_t</span> mem_len, uint64_t* bpf_return_value);</div>
+<div class="line"><a name="l00180"></a><span class="lineno">  180</span>&#160; </div>
+<div class="line"><a name="l00191"></a><span class="lineno">  191</span>&#160;<a class="code" href="ubpf_8h.html#a6334115c4408267ec35087ade6128fa0">ubpf_jit_fn</a></div>
+<div class="line"><a name="l00192"></a><span class="lineno">  192</span>&#160;<a class="code" href="ubpf_8h.html#a67b901bf6d169b6b28f818f15bd17cba">ubpf_compile</a>(<span class="keyword">struct</span> ubpf_vm* vm, <span class="keywordtype">char</span>** errmsg);</div>
 <div class="line"><a name="l00193"></a><span class="lineno">  193</span>&#160; </div>
-<div class="line"><a name="l00207"></a><span class="lineno">  207</span>&#160;<span class="keywordtype">int</span> <a class="code" href="ubpf_8h.html#ab34e26c0a46366345df354ce992448c4">ubpf_translate</a>(<span class="keyword">struct</span> ubpf_vm *vm, uint8_t *buffer, <span class="keywordtype">size_t</span> *size, <span class="keywordtype">char</span> **errmsg);</div>
-<div class="line"><a name="l00208"></a><span class="lineno">  208</span>&#160; </div>
-<div class="line"><a name="l00220"></a><span class="lineno">  220</span>&#160;<span class="keywordtype">int</span> <a class="code" href="ubpf_8h.html#a0046484ecdb72363d0c5ae710e7b96c3">ubpf_set_unwind_function_index</a>(<span class="keyword">struct</span> ubpf_vm *vm, <span class="keywordtype">unsigned</span> <span class="keywordtype">int</span> idx);</div>
-<div class="line"><a name="l00221"></a><span class="lineno">  221</span>&#160; </div>
-<div class="line"><a name="l00228"></a><span class="lineno">  228</span>&#160;<span class="keywordtype">void</span> <a class="code" href="ubpf_8h.html#aeb0990b88e11d2a0ba89fbaf8086cc0f">ubpf_set_registers</a>(<span class="keyword">struct</span> ubpf_vm *vm, uint64_t *regs);</div>
-<div class="line"><a name="l00229"></a><span class="lineno">  229</span>&#160; </div>
-<div class="line"><a name="l00236"></a><span class="lineno">  236</span>&#160;uint64_t *<a class="code" href="ubpf_8h.html#a2e649a921bff795712a97d3ad849f6e4">ubpf_get_registers</a>(<span class="keyword">const</span> <span class="keyword">struct</span> ubpf_vm *vm);</div>
-<div class="line"><a name="l00237"></a><span class="lineno">  237</span>&#160; </div>
-<div class="line"><a name="l00246"></a><span class="lineno">  246</span>&#160;<span class="keywordtype">int</span> <a class="code" href="ubpf_8h.html#a3257e0611c177eeaba7053e2eca92701">ubpf_set_pointer_secret</a>(<span class="keyword">struct</span> ubpf_vm *vm, uint64_t secret);</div>
-<div class="line"><a name="l00247"></a><span class="lineno">  247</span>&#160; </div>
-<div class="line"><a name="l00248"></a><span class="lineno">  248</span>&#160;<span class="preprocessor">#endif</span></div>
+<div class="line"><a name="l00194"></a><span class="lineno">  194</span>&#160;<span class="comment">/*</span></div>
+<div class="line"><a name="l00195"></a><span class="lineno">  195</span>&#160;<span class="comment"> * Translate the eBPF byte code to x64 machine code, store in buffer, and</span></div>
+<div class="line"><a name="l00196"></a><span class="lineno">  196</span>&#160;<span class="comment"> * write the resulting count of bytes to size.</span></div>
+<div class="line"><a name="l00197"></a><span class="lineno">  197</span>&#160;<span class="comment"> *</span></div>
+<div class="line"><a name="l00198"></a><span class="lineno">  198</span>&#160;<span class="comment"> * This must be called after registering all functions.</span></div>
+<div class="line"><a name="l00199"></a><span class="lineno">  199</span>&#160;<span class="comment"> *</span></div>
+<div class="line"><a name="l00200"></a><span class="lineno">  200</span>&#160;<span class="comment"> * Returns 0 on success, -1 on error. In case of error a pointer to the error</span></div>
+<div class="line"><a name="l00201"></a><span class="lineno">  201</span>&#160;<span class="comment"> * message will be stored in &#39;errmsg&#39; and should be freed by the caller.</span></div>
+<div class="line"><a name="l00202"></a><span class="lineno">  202</span>&#160;<span class="comment"> */</span></div>
+<div class="line"><a name="l00203"></a><span class="lineno">  203</span>&#160; </div>
+<div class="line"><a name="l00217"></a><span class="lineno">  217</span>&#160;<span class="keywordtype">int</span></div>
+<div class="line"><a name="l00218"></a><span class="lineno">  218</span>&#160;<a class="code" href="ubpf_8h.html#ab34e26c0a46366345df354ce992448c4">ubpf_translate</a>(<span class="keyword">struct</span> ubpf_vm* vm, uint8_t* buffer, <span class="keywordtype">size_t</span>* size, <span class="keywordtype">char</span>** errmsg);</div>
+<div class="line"><a name="l00219"></a><span class="lineno">  219</span>&#160; </div>
+<div class="line"><a name="l00231"></a><span class="lineno">  231</span>&#160;<span class="keywordtype">int</span></div>
+<div class="line"><a name="l00232"></a><span class="lineno">  232</span>&#160;<a class="code" href="ubpf_8h.html#a0046484ecdb72363d0c5ae710e7b96c3">ubpf_set_unwind_function_index</a>(<span class="keyword">struct</span> ubpf_vm* vm, <span class="keywordtype">unsigned</span> <span class="keywordtype">int</span> idx);</div>
+<div class="line"><a name="l00233"></a><span class="lineno">  233</span>&#160; </div>
+<div class="line"><a name="l00240"></a><span class="lineno">  240</span>&#160;<span class="keywordtype">void</span></div>
+<div class="line"><a name="l00241"></a><span class="lineno">  241</span>&#160;<a class="code" href="ubpf_8h.html#aeb0990b88e11d2a0ba89fbaf8086cc0f">ubpf_set_registers</a>(<span class="keyword">struct</span> ubpf_vm* vm, uint64_t* regs);</div>
+<div class="line"><a name="l00242"></a><span class="lineno">  242</span>&#160; </div>
+<div class="line"><a name="l00249"></a><span class="lineno">  249</span>&#160;uint64_t*</div>
+<div class="line"><a name="l00250"></a><span class="lineno">  250</span>&#160;<a class="code" href="ubpf_8h.html#a2e649a921bff795712a97d3ad849f6e4">ubpf_get_registers</a>(<span class="keyword">const</span> <span class="keyword">struct</span> ubpf_vm* vm);</div>
+<div class="line"><a name="l00251"></a><span class="lineno">  251</span>&#160; </div>
+<div class="line"><a name="l00260"></a><span class="lineno">  260</span>&#160;<span class="keywordtype">int</span></div>
+<div class="line"><a name="l00261"></a><span class="lineno">  261</span>&#160;<a class="code" href="ubpf_8h.html#a3257e0611c177eeaba7053e2eca92701">ubpf_set_pointer_secret</a>(<span class="keyword">struct</span> ubpf_vm* vm, uint64_t secret);</div>
+<div class="line"><a name="l00262"></a><span class="lineno">  262</span>&#160; </div>
+<div class="line"><a name="l00263"></a><span class="lineno">  263</span>&#160;<span class="preprocessor">#endif</span></div>
 </div><!-- fragment --></div><!-- contents -->
 <div class="ttc" id="aubpf_8h_html_a3257e0611c177eeaba7053e2eca92701"><div class="ttname"><a href="ubpf_8h.html#a3257e0611c177eeaba7053e2eca92701">ubpf_set_pointer_secret</a></div><div class="ttdeci">int ubpf_set_pointer_secret(struct ubpf_vm *vm, uint64_t secret)</div><div class="ttdoc">Optional secret to improve ROP protection.</div></div>
 <div class="ttc" id="aubpf_8h_html_a67b901bf6d169b6b28f818f15bd17cba"><div class="ttname"><a href="ubpf_8h.html#a67b901bf6d169b6b28f818f15bd17cba">ubpf_compile</a></div><div class="ttdeci">ubpf_jit_fn ubpf_compile(struct ubpf_vm *vm, char **errmsg)</div><div class="ttdoc">Compile a BPF program in the VM to native code.</div></div>
