@@ -95,6 +95,11 @@ Typedefs</h2></td></tr>
 <tr class="memitem:a6334115c4408267ec35087ade6128fa0"><td class="memItemLeft" align="right" valign="top">typedef uint64_t(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="ubpf_8h.html#a6334115c4408267ec35087ade6128fa0">ubpf_jit_fn</a>) (void *mem, size_t mem_len)</td></tr>
 <tr class="memdesc:a6334115c4408267ec35087ade6128fa0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Opaque type for a uBPF JIT compiled function.  <a href="ubpf_8h.html#a6334115c4408267ec35087ade6128fa0">More...</a><br /></td></tr>
 <tr class="separator:a6334115c4408267ec35087ade6128fa0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a70fb644d080e8448c1db17bb99858391"><td class="memItemLeft" align="right" valign="top">typedef uint64_t(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="ubpf_8h.html#a70fb644d080e8448c1db17bb99858391">ubpf_data_relocation</a>) (void *user_context, const uint8_t *data, uint64_t data_size, const char *symbol_name, uint64_t symbol_offset, uint64_t symbol_size)</td></tr>
+<tr class="memdesc:a70fb644d080e8448c1db17bb99858391"><td class="mdescLeft">&#160;</td><td class="mdescRight">Data relocation function that is called by the VM when it encounters a R_BPF_64_64 relocation in the maps section of the ELF file.  <a href="ubpf_8h.html#a70fb644d080e8448c1db17bb99858391">More...</a><br /></td></tr>
+<tr class="separator:a70fb644d080e8448c1db17bb99858391"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a64bd2f640f675e3eeff48ea52583d699"><td class="memItemLeft" align="right" valign="top">typedef bool(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="ubpf_8h.html#a64bd2f640f675e3eeff48ea52583d699">ubpf_bounds_check</a>) (void *context, uint64_t addr, uint64_t size)</td></tr>
+<tr class="separator:a64bd2f640f675e3eeff48ea52583d699"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="func-members"></a>
 Functions</h2></td></tr>
@@ -140,6 +145,12 @@ Functions</h2></td></tr>
 <tr class="memitem:a3257e0611c177eeaba7053e2eca92701"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="ubpf_8h.html#a3257e0611c177eeaba7053e2eca92701">ubpf_set_pointer_secret</a> (struct ubpf_vm *vm, uint64_t secret)</td></tr>
 <tr class="memdesc:a3257e0611c177eeaba7053e2eca92701"><td class="mdescLeft">&#160;</td><td class="mdescRight">Optional secret to improve ROP protection.  <a href="ubpf_8h.html#a3257e0611c177eeaba7053e2eca92701">More...</a><br /></td></tr>
 <tr class="separator:a3257e0611c177eeaba7053e2eca92701"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6ce8c1133902da4629c53aa82c159611"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="ubpf_8h.html#a6ce8c1133902da4629c53aa82c159611">ubpf_register_data_relocation</a> (struct ubpf_vm *vm, void *user_context, <a class="el" href="ubpf_8h.html#a70fb644d080e8448c1db17bb99858391">ubpf_data_relocation</a> relocation)</td></tr>
+<tr class="memdesc:a6ce8c1133902da4629c53aa82c159611"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set a relocation function for the VM.  <a href="ubpf_8h.html#a6ce8c1133902da4629c53aa82c159611">More...</a><br /></td></tr>
+<tr class="separator:a6ce8c1133902da4629c53aa82c159611"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a286aa9da7688d1327756e967eafc2f03"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="ubpf_8h.html#a286aa9da7688d1327756e967eafc2f03">ubpf_register_data_bounds_check</a> (struct ubpf_vm *vm, void *user_context, <a class="el" href="ubpf_8h.html#a64bd2f640f675e3eeff48ea52583d699">ubpf_bounds_check</a> bounds_check)</td></tr>
+<tr class="memdesc:a286aa9da7688d1327756e967eafc2f03"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set a bounds check function for the VM.  <a href="ubpf_8h.html#a286aa9da7688d1327756e967eafc2f03">More...</a><br /></td></tr>
+<tr class="separator:a286aa9da7688d1327756e967eafc2f03"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Macro Definition Documentation</h2>
 <a id="a7b029668bfe717c5d7b33fba3847a00f"></a>
@@ -175,6 +186,48 @@ Functions</h2></td></tr>
 </div>
 </div>
 <h2 class="groupheader">Typedef Documentation</h2>
+<a id="a64bd2f640f675e3eeff48ea52583d699"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a64bd2f640f675e3eeff48ea52583d699">&#9670;&nbsp;</a></span>ubpf_bounds_check</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef bool(* ubpf_bounds_check) (void *context, uint64_t addr, uint64_t size)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a70fb644d080e8448c1db17bb99858391"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a70fb644d080e8448c1db17bb99858391">&#9670;&nbsp;</a></span>ubpf_data_relocation</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef uint64_t(* ubpf_data_relocation) (void *user_context, const uint8_t *data, uint64_t data_size, const char *symbol_name, uint64_t symbol_offset, uint64_t symbol_size)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Data relocation function that is called by the VM when it encounters a R_BPF_64_64 relocation in the maps section of the ELF file. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">user_context</td><td>The user context that was passed to ubpf_register_data_relocation. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">data</td><td>Pointer to start of the map section. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">data_size</td><td>Size of the map section. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">symbol_name</td><td>Name of the symbol that is referenced. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">symbol_offset</td><td>Offset of the symbol relative to the start of the map section. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">symbol_size</td><td>Size of the symbol. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>uint64_t The value to insert into the BPF program. </dd></dl>
+
+</div>
+</div>
 <a id="a6334115c4408267ec35087ade6128fa0"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a6334115c4408267ec35087ade6128fa0">&#9670;&nbsp;</a></span>ubpf_jit_fn</h2>
 
@@ -478,6 +531,101 @@ Functions</h2></td></tr>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a286aa9da7688d1327756e967eafc2f03"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a286aa9da7688d1327756e967eafc2f03">&#9670;&nbsp;</a></span>ubpf_register_data_bounds_check()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int ubpf_register_data_bounds_check </td>
+          <td>(</td>
+          <td class="paramtype">struct ubpf_vm *&#160;</td>
+          <td class="paramname"><em>vm</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>user_context</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="ubpf_8h.html#a64bd2f640f675e3eeff48ea52583d699">ubpf_bounds_check</a>&#160;</td>
+          <td class="paramname"><em>bounds_check</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Set a bounds check function for the VM. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">vm</td><td>The VM to set the bounds check function for. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">user_context</td><td>The user context to pass to the bounds check function. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">bounds_check</td><td>The bounds check function. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="retval"><dt>Return values</dt><dd>
+  <table class="retval">
+    <tr><td class="paramname">0</td><td>Success. </td></tr>
+    <tr><td class="paramname">-1</td><td>Failure. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a6ce8c1133902da4629c53aa82c159611"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6ce8c1133902da4629c53aa82c159611">&#9670;&nbsp;</a></span>ubpf_register_data_relocation()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int ubpf_register_data_relocation </td>
+          <td>(</td>
+          <td class="paramtype">struct ubpf_vm *&#160;</td>
+          <td class="paramname"><em>vm</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>user_context</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="ubpf_8h.html#a70fb644d080e8448c1db17bb99858391">ubpf_data_relocation</a>&#160;</td>
+          <td class="paramname"><em>relocation</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Set a relocation function for the VM. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">vm</td><td>The VM to set the relocation function for. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">relocation</td><td>The relocation function. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>int The value to insert into the BPF program. </dd></dl>
 
 </div>
 </div>
