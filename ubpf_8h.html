@@ -87,8 +87,11 @@ Macros</h2></td></tr>
 <tr class="memdesc:a7b029668bfe717c5d7b33fba3847a00f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default maximum number of instructions that a program can contain.  <a href="ubpf_8h.html#a7b029668bfe717c5d7b33fba3847a00f">More...</a><br /></td></tr>
 <tr class="separator:a7b029668bfe717c5d7b33fba3847a00f"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab41a6986b0045cc2e5c84a75d08c7a12"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="ubpf_8h.html#ab41a6986b0045cc2e5c84a75d08c7a12">UBPF_STACK_SIZE</a>&#160;&#160;&#160;512</td></tr>
-<tr class="memdesc:ab41a6986b0045cc2e5c84a75d08c7a12"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default stack size for the VM.  <a href="ubpf_8h.html#ab41a6986b0045cc2e5c84a75d08c7a12">More...</a><br /></td></tr>
+<tr class="memdesc:ab41a6986b0045cc2e5c84a75d08c7a12"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default stack size for the VM. Must be divisible by 16.  <a href="ubpf_8h.html#ab41a6986b0045cc2e5c84a75d08c7a12">More...</a><br /></td></tr>
 <tr class="separator:ab41a6986b0045cc2e5c84a75d08c7a12"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a23e70b5f29f0296e69a72ec5cfc588d8"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="ubpf_8h.html#a23e70b5f29f0296e69a72ec5cfc588d8">UBPF_MAX_CALL_DEPTH</a>&#160;&#160;&#160;10</td></tr>
+<tr class="memdesc:a23e70b5f29f0296e69a72ec5cfc588d8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Default maximum number of nested calls in the VM.  <a href="ubpf_8h.html#a23e70b5f29f0296e69a72ec5cfc588d8">More...</a><br /></td></tr>
+<tr class="separator:a23e70b5f29f0296e69a72ec5cfc588d8"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="typedef-members"></a>
 Typedefs</h2></td></tr>
@@ -153,6 +156,22 @@ Functions</h2></td></tr>
 <tr class="separator:a286aa9da7688d1327756e967eafc2f03"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Macro Definition Documentation</h2>
+<a id="a23e70b5f29f0296e69a72ec5cfc588d8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a23e70b5f29f0296e69a72ec5cfc588d8">&#9670;&nbsp;</a></span>UBPF_MAX_CALL_DEPTH</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define UBPF_MAX_CALL_DEPTH&#160;&#160;&#160;10</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Default maximum number of nested calls in the VM. </p>
+
+</div>
+</div>
 <a id="a7b029668bfe717c5d7b33fba3847a00f"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a7b029668bfe717c5d7b33fba3847a00f">&#9670;&nbsp;</a></span>UBPF_MAX_INSTS</h2>
 
@@ -181,7 +200,7 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p>Default stack size for the VM. </p>
+<p>Default stack size for the VM. Must be divisible by 16. </p>
 
 </div>
 </div>
