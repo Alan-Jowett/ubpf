@@ -31,18 +31,30 @@ on:
         required: false
         type: boolean
 
+permissions:
+  contents: read
+
 jobs:
   build:
+    permissions:
+      actions: read  # for github/codeql-action/init to get workflow details
+      contents: read  # for actions/checkout to fetch code
+      security-events: write  # for github/codeql-action/analyze to upload SARIF results
     runs-on: ${{ inputs.platform }}
 
     steps:
-    - uses: actions/checkout@v3
+    - name: Harden Runner
+      uses: step-security/harden-runner@f086349bfa2bd1361f7909c78558e816508cdc10 # v2.8.0
+      with:
+        egress-policy: audit
+
+    - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
       with:
         submodules: 'recursive'
 
     - name: Initialize CodeQL
       if: inputs.build_codeql == true
-      uses: github/codeql-action/init@0ba4244466797eb048eb91a6cd43d5c03ca8bd05
+      uses: github/codeql-action/init@9fdb3e49720b44c48891d036bb502feb25684276
       with:
         languages: 'cpp'
 
@@ -70,9 +82,9 @@ jobs:
         if ($LastExitCode -ne 0) { throw "Test failed"; }
         & $BPF_CONFORMANCE_RUNNER --test_file_directory ..\tests --plugin_path ubpf_plugin.exe --plugin_options --interpret
         if ($LastExitCode -ne 0) { throw "Test failed"; }
-        & $BPF_CONFORMANCE_RUNNER --exclude lock_ --test_file_directory ..\..\external\bpf_conformance\tests --plugin_path ubpf_plugin.exe --plugin_options --jit
+        & $BPF_CONFORMANCE_RUNNER --exclude_regex lock_ --test_file_directory ..\..\external\bpf_conformance\tests --plugin_path ubpf_plugin.exe --plugin_options --jit
         if ($LastExitCode -ne 0) { throw "Test failed"; }
-        & $BPF_CONFORMANCE_RUNNER --exclude lock_ --test_file_directory ..\..\external\bpf_conformance\tests --plugin_path ubpf_plugin.exe --plugin_options --interpret
+        & $BPF_CONFORMANCE_RUNNER --exclude_regex lock_ --test_file_directory ..\..\external\bpf_conformance\tests --plugin_path ubpf_plugin.exe --plugin_options --interpret
         if ($LastExitCode -ne 0) { throw "Test failed"; }
 
     - name: Generate the TGZ package
@@ -96,7 +108,7 @@ jobs:
 
     - name: Upload the Windows TGZ package
       if: inputs.upload_packages == true
-      uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce
+      uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
       with:
         name: windows_tgz_package
         path: ${{ steps.package_locations.outputs.REL_TGZ_PACKAGE_PATH }}
@@ -104,4 +116,4 @@ jobs:
 
     - name: Perform CodeQL Analysis
       if: inputs.build_codeql == true
-      uses: github/codeql-action/analyze@0ba4244466797eb048eb91a6cd43d5c03ca8bd05
+      uses: github/codeql-action/analyze@9fdb3e49720b44c48891d036bb502feb25684276

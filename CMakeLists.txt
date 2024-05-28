@@ -7,14 +7,9 @@
 # the LICENSE file found in the root directory of this source tree.
 #
 
+include(ExternalProject)
 cmake_minimum_required(VERSION 3.16)
 project("ubpf")
-
-if (UBPF_INSTALL_GIT_HOOKS AND EXISTS "${PROJECT_SOURCE_DIR}/.git/hooks")
-    # Install Git pre-commit hook
-    file(COPY scripts/pre-commit scripts/commit-msg
-        DESTINATION "${PROJECT_SOURCE_DIR}/.git/hooks")
-endif()
 
 include("cmake/platform.cmake")
 include("cmake/settings.cmake")
@@ -26,11 +21,17 @@ if(UBPF_ENABLE_TESTS)
 endif()
 
 add_subdirectory("vm")
+    ExternalProject_Add(Conformance
+        INSTALL_COMMAND ""
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/external/bpf_conformance
+				BINARY_DIR ${CMAKE_BINARY_DIR}/external/bpf_conformance
+        EXCLUDE_FROM_ALL true
+        STEP_TARGETS build)
 
 if(UBPF_ENABLE_TESTS)
+  add_subdirectory("custom_tests")
   add_subdirectory("ubpf_plugin")
   if (NOT UBPF_SKIP_EXTERNAL)
-    add_subdirectory("external")
   endif()
   add_subdirectory("bpf")
   add_subdirectory("aarch64_test")
@@ -40,3 +41,6 @@ if(UBPF_ENABLE_PACKAGE)
   include("cmake/packaging.cmake")
 endif()
 
+if (UBPF_ENABLE_LIBFUZZER)
+  add_subdirectory("libfuzzer")
+endif()

@@ -18,16 +18,17 @@
  * limitations under the License.
  */
 
+#include "ubpf.h"
+#include "ubpf_jit_support.h"
+#define _GNU_SOURCE
+
 #include "ebpf.h"
 #include <stdint.h>
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
-#include <inttypes.h>
 #include <sys/mman.h>
-#include <errno.h>
 #include <assert.h>
 #include "ubpf_int.h"
 #include "ubpf_jit_x86_64.h"
@@ -55,39 +56,51 @@ muldivmod(struct jit_state* state, uint8_t opcode, int src, int dst, int32_t imm
  * volatile to x64 non-volatile.
  */
 
-#if defined(_WIN32)
-static int platform_nonvolatile_registers[] = {RBP, RBX, RDI, RSI, R13, R14, R15};
-static int platform_parameter_registers[] = {RCX, RDX, R8, R9};
+// Because of this designation and the way that the registers are mapped
+// between native and BPF, the value in native R10 is always something
+// the BPF program has to consider trashed across external function calls.
+// Therefore, during invocation of external function calls, we can use
+// native R10 for free.
 #define RCX_ALT R10
+
+#if defined(_WIN32)
+static int platform_nonvolatile_registers[] = {RBP, RBX, RDI, RSI, R12, R13, R14, R15}; // Callee-saved registers.
+static int platform_volatile_registers[] = {RAX, RDX, RCX, R8, R9, R10, R11}; // Caller-saved registers (if needed).
+static int platform_parameter_registers[] = {RCX, RDX, R8, R9};
 static int register_map[REGISTER_MAP_SIZE] = {
+    // Scratch registers
     RAX,
     R10,
     RDX,
     R8,
     R9,
-    R14,
-    R15,
+    R12,
+    // Non-volatile registers
+    RBX,
     RDI,
     RSI,
-    RBX,
-    RBP,
+    R14,
+    R15, // Until further notice, r15 must be mapped to eBPF register r10
 };
 #else
-#define RCX_ALT R9
-static int platform_nonvolatile_registers[] = {RBP, RBX, R13, R14, R15};
+static int platform_nonvolatile_registers[] = {RBP, RBX, R12, R13, R14, R15}; // Callee-saved registers.
+static int platform_volatile_registers[] = {
+    RAX, RDI, RSI, RDX, RCX, R8, R9, R10, R11}; // Caller-saved registers (if needed).
 static int platform_parameter_registers[] = {RDI, RSI, RDX, RCX, R8, R9};
 static int register_map[REGISTER_MAP_SIZE] = {
+    // Scratch registers
     RAX,
     RDI,
     RSI,
     RDX,
-    R9,
+    R10,
     R8,
+    // Non-volatile registers
     RBX,
+    R12,
     R13,
     R14,
-    R15,
-    RBP,
+    R15, // Until further notice, r15 must be mapped to eBPF register r10
 };
 #endif
 
@@ -100,23 +113,30 @@ map_register(int r)
 }
 
 static inline void
-emit_local_call(struct jit_state* state, uint32_t target_pc)
+emit_local_call(struct ubpf_vm* vm, struct jit_state* state, uint32_t target_pc)
 {
-    /*
-     * Pushing 4 * 8 = 32 bytes will maintain the invariant
-     * that the stack is 16-byte aligned.
-     */
+    UNUSED_PARAMETER(vm);
+    // Because the top of the stack holds the stack usage of the calling function,
+    // we adjust the base pointer down by that value!
+    // sub r15, [rsp]
+    emit1(state, 0x4c);
+    emit1(state, 0x2B);
+    emit1(state, 0x3C); // Mod: 00b Reg: 111b RM: 100b
+    emit1(state, 0x24); // Scale: 00b Index: 100b Base: 100b
+
     emit_push(state, map_register(BPF_REG_6));
     emit_push(state, map_register(BPF_REG_7));
     emit_push(state, map_register(BPF_REG_8));
     emit_push(state, map_register(BPF_REG_9));
+
 #if defined(_WIN32)
     /* Windows x64 ABI requires home register space */
     /* Allocate home register space - 4 registers */
     emit_alu64_imm32(state, 0x81, 5, RSP, 4 * sizeof(uint64_t));
 #endif
     emit1(state, 0xe8); // e8 is the opcode for a CALL
-    emit_jump_target_address(state, target_pc);
+    emit_local_call_address_reloc(state, target_pc);
+
 #if defined(_WIN32)
     /* Deallocate home register space - 4 registers */
     emit_alu64_imm32(state, 0x81, 0, RSP, 4 * sizeof(uint64_t));
@@ -125,6 +145,33 @@ emit_local_call(struct jit_state* state, uint32_t target_pc)
     emit_pop(state, map_register(BPF_REG_8));
     emit_pop(state, map_register(BPF_REG_7));
     emit_pop(state, map_register(BPF_REG_6));
+
+    // Because the top of the stack holds the stack usage of the calling function,
+    // we adjust the base pointer back up by that value!
+    // add r15, [rsp]
+    emit1(state, 0x4c);
+    emit1(state, 0x03);
+    emit1(state, 0x3C); // Mod: 00b Reg: 111b RM: 100b
+    emit1(state, 0x24); // Scale: 00b Index: 100b Base: 100b
+}
+
+static uint32_t
+emit_dispatched_external_helper_address(struct jit_state* state, struct ubpf_vm* vm)
+{
+    uint32_t external_helper_address_target = state->offset;
+    emit8(state, (uint64_t)vm->dispatcher);
+    return external_helper_address_target;
+}
+
+static uint32_t
+emit_helper_table(struct jit_state* state, struct ubpf_vm* vm)
+{
+
+    uint32_t helper_table_address_target = state->offset;
+    for (int i = 0; i < MAX_EXT_FUNCS; i++) {
+        emit8(state, (uint64_t)vm->ext_funcs[i]);
+    }
+    return helper_table_address_target;
 }
 
 static uint32_t
@@ -140,32 +187,27 @@ emit_retpoline(struct jit_state* state)
     /* label0: */
     /* call label1 */
     uint32_t retpoline_target = state->offset;
-    emit1(state, 0xe8);
-    uint32_t label1_call_offset = state->offset;
-    emit4(state, 0x00);
+    uint32_t label1_call_offset = emit_call(state, 0);
 
     /* capture_ret_spec: */
     /* pause */
     uint32_t capture_ret_spec = state->offset;
-    emit1(state, 0xf3);
-    emit1(state, 0x90);
+    emit_pause(state);
     /* jmp  capture_ret_spec */
-    emit1(state, 0xe9);
-    emit_jump_target_offset(state, state->offset, capture_ret_spec);
-    emit4(state, 0x00);
+    emit_jmp(state, capture_ret_spec);
 
     /* label1: */
     /* mov rax, (rsp) */
     uint32_t label1 = state->offset;
     emit1(state, 0x48);
     emit1(state, 0x89);
-    emit1(state, 0x04);
-    emit1(state, 0x24);
+    emit1(state, 0x04); // Mod: 00b Reg: 000b RM: 100b
+    emit1(state, 0x24); // Scale: 00b Index: 100b Base: 100b
 
     /* ret */
-    emit1(state, 0xc3);
+    emit_ret(state);
 
-    emit_jump_target_offset(state, label1_call_offset, label1);
+    fixup_jump_target(state->jumps, state->num_jumps, label1_call_offset, label1);
 
     return retpoline_target;
 }
@@ -193,11 +235,31 @@ ubpf_set_register_offset(int x)
     }
 }
 
+/*
+ * In order to make it so that the generated code is completely standalone, all the necessary
+ * function pointers for external helpers are embedded in the jitted code. The layout looks like:
+ *
+ *                 state->buffer: CODE
+ *                                CODE
+ *                                CODE
+ *                                ...
+ *                                CODE
+ *                                External Helper External Dispatcher Function Pointer (8 bytes, maybe NULL)
+ *                                External Helper Function Pointer Idx 0 (8 bytes, maybe NULL)
+ *                                External Helper Function Pointer Idx 1 (8 bytes, maybe NULL)
+ *                                ...
+ *                                External Helper Function Pointer Idx MAX_EXT_FUNCS-1 (8 bytes, maybe NULL)
+ * state->buffer + state->offset:
+ *
+ * The layout and operation of this mechanism is identical for code JIT compiled for Arm.
+ */
+
 static int
 translate(struct ubpf_vm* vm, struct jit_state* state, char** errmsg)
 {
     int i;
 
+    (void)platform_volatile_registers;
     /* Save platform non-volatile registers */
     for (i = 0; i < _countof(platform_nonvolatile_registers); i++) {
         emit_push(state, platform_nonvolatile_registers[i]);
@@ -208,11 +270,16 @@ translate(struct ubpf_vm* vm, struct jit_state* state, char** errmsg)
         emit_mov(state, platform_parameter_registers[0], map_register(BPF_REG_1));
     }
 
+    /* Move the first platform parameter register to the (volatile) register
+     * that holds the pointer to the context.
+     */
+    emit_mov(state, platform_parameter_registers[0], VOLATILE_CTXT);
+
     /*
      * Assuming that the stack is 16-byte aligned right before
      * the call insn that brought us to this code, when
      * we start executing the jit'd code, we need to regain a 16-byte
-     * alignment. The UBPF_STACK_SIZE is guaranteed to be
+     * alignment. The UBPF_EBPF_STACK_SIZE is guaranteed to be
      * divisible by 16. However, if we pushed an even number of
      * registers on the stack when we are saving state (see above),
      * then we have to add an additional 8 bytes to get back
@@ -223,12 +290,24 @@ translate(struct ubpf_vm* vm, struct jit_state* state, char** errmsg)
     }
 
     /*
-     * Set BPF R10 (the way to access the frame in eBPF) to match RSP.
+     * Let's set RBP to RSP so that we can restore RSP later!
      */
-    emit_mov(state, RSP, map_register(BPF_REG_10));
+    emit_mov(state, RSP, RBP);
 
-    /* Allocate stack space */
-    emit_alu64_imm32(state, 0x81, 5, RSP, UBPF_STACK_SIZE);
+    /* Configure eBPF program stack space */
+    if (state->jit_mode == BasicJitMode) {
+        /*
+         * Set BPF R10 (the way to access the frame in eBPF) the beginning
+         * of the eBPF program's stack space.
+         */
+        emit_mov(state, RSP, map_register(BPF_REG_10));
+        /* Allocate eBPF program stack space */
+        emit_alu64_imm32(state, 0x81, 5, RSP, UBPF_EBPF_STACK_SIZE);
+    } else {
+        /* Use given eBPF program stack space */
+        emit_mov(state, platform_parameter_registers[2], map_register(BPF_REG_10));
+        emit_alu64(state, 0x01, platform_parameter_registers[3], map_register(BPF_REG_10));
+    }
 
 #if defined(_WIN32)
     /* Windows x64 ABI requires home register space */
@@ -252,19 +331,34 @@ translate(struct ubpf_vm* vm, struct jit_state* state, char** errmsg)
     emit_jmp(state, TARGET_PC_EXIT);
 
     for (i = 0; i < vm->num_insts; i++) {
+        if (state->jit_status != NoError) {
+            break;
+        }
+
         struct ebpf_inst inst = ubpf_fetch_instruction(vm, i);
-        state->pc_locs[i] = state->offset;
 
         int dst = map_register(inst.dst);
         int src = map_register(inst.src);
         uint32_t target_pc = i + inst.offset + 1;
 
         if (i == 0 || vm->int_funcs[i]) {
-            /* When we are the subject of a call, we have to properly align our
-             * stack pointer.
-             */
+            size_t prolog_start = state->offset;
+            uint16_t stack_usage = ubpf_stack_usage_for_local_func(vm, i);
             emit_alu64_imm32(state, 0x81, 5, RSP, 8);
+            emit1(state, 0x48);
+            emit1(state, 0xC7);
+            emit1(state, 0x04); // Mod: 00b Reg: 000b RM: 100b
+            emit1(state, 0x24); // Scale: 00b Index: 100b Base: 100b
+            emit4(state, stack_usage);
+            // Record the size of the prolog so that we can calculate offset when doing a local call.
+            if (state->bpf_function_prolog_size == 0) {
+                state->bpf_function_prolog_size = state->offset - prolog_start;
+            } else {
+                assert(state->bpf_function_prolog_size == state->offset - prolog_start);
+            }
         }
+
+        state->pc_locs[i] = state->offset;
 
         switch (inst.opcode) {
         case EBPF_OP_ADD_IMM:
@@ -337,7 +431,14 @@ translate(struct ubpf_vm* vm, struct jit_state* state, char** errmsg)
             break;
 
         case EBPF_OP_LE:
-            /* No-op */
+            /* x64 instruction set is already little-endian, so no-op except for truncation. */
+            if (inst.imm == 16) {
+                /* Truncate to 16 bits */
+                emit_alu32_imm32(state, 0x81, 4, dst, 0xffff);
+            } else if (inst.imm == 32) {
+                /* Truncate to 32 bits */
+                emit_alu32_imm32(state, 0x81, 4, dst, 0xffffffff);
+            }
             break;
         case EBPF_OP_BE:
             if (inst.imm == 16) {
@@ -607,14 +708,14 @@ translate(struct ubpf_vm* vm, struct jit_state* state, char** errmsg)
             /* We reserve RCX for shifts */
             if (inst.src == 0) {
                 emit_mov(state, RCX_ALT, RCX);
-                emit_call(state, vm->ext_funcs[inst.imm]);
+                emit_dispatched_external_helper_call(state, inst.imm);
                 if (inst.imm == vm->unwind_stack_extension_index) {
                     emit_cmp_imm32(state, map_register(BPF_REG_0), 0);
                     emit_jcc(state, 0x84, TARGET_PC_EXIT);
                 }
             } else if (inst.src == 1) {
                 target_pc = i + inst.imm + 1;
-                emit_local_call(state, target_pc);
+                emit_local_call(vm, state, target_pc);
             }
             break;
         case EBPF_OP_EXIT:
@@ -672,9 +773,54 @@ translate(struct ubpf_vm* vm, struct jit_state* state, char** errmsg)
         }
 
         default:
+            state->jit_status = UnknownInstruction;
             *errmsg = ubpf_error("Unknown instruction at PC %d: opcode %02x", i, inst.opcode);
-            return -1;
         }
+
+        // If this is a ALU32 instruction, truncate the target register to 32 bits.
+        if (((inst.opcode & EBPF_CLS_MASK) == EBPF_CLS_ALU) &&
+            (inst.opcode & EBPF_ALU_OP_MASK) != 0xd0) {
+            emit_truncate_u32(state, dst);
+        }
+    }
+
+    if (state->jit_status != NoError) {
+        switch (state->jit_status) {
+        case TooManyJumps: {
+            *errmsg = ubpf_error("Too many jump instructions");
+            break;
+        }
+        case TooManyLoads: {
+            *errmsg = ubpf_error("Too many load instructions");
+            break;
+        }
+        case TooManyLeas: {
+            *errmsg = ubpf_error("Too many LEA calculations");
+            break;
+        }
+        case TooManyLocalCalls: {
+            *errmsg = ubpf_error("Too many local calls");
+            break;
+        }
+        case UnexpectedInstruction: {
+            // errmsg set at time the error was detected because the message requires
+            // information about the unexpected instruction.
+            break;
+        }
+        case UnknownInstruction: {
+            // errmsg set at time the error was detected because the message requires
+            // information about the unknown instruction.
+            break;
+        }
+        case NotEnoughSpace: {
+            *errmsg = ubpf_error("Target buffer too small");
+            break;
+        }
+        case NoError: {
+            assert(false);
+        }
+        }
+        return -1;
     }
 
     /* Epilogue */
@@ -685,8 +831,8 @@ translate(struct ubpf_vm* vm, struct jit_state* state, char** errmsg)
         emit_mov(state, map_register(BPF_REG_0), RAX);
     }
 
-    /* Deallocate stack space by restoring RSP from BPF R10. */
-    emit_mov(state, map_register(BPF_REG_10), RSP);
+    /* Deallocate stack space by restoring RSP from RBP. */
+    emit_mov(state, RBP, RSP);
 
     if (!(_countof(platform_nonvolatile_registers) % 2)) {
         emit_alu64_imm32(state, 0x81, 0, RSP, 0x8);
@@ -700,6 +846,8 @@ translate(struct ubpf_vm* vm, struct jit_state* state, char** errmsg)
     emit1(state, 0xc3); /* ret */
 
     state->retpoline_loc = emit_retpoline(state);
+    state->dispatcher_loc = emit_dispatched_external_helper_address(state, vm);
+    state->helper_table_loc = emit_helper_table(state, vm);
 
     return 0;
 }
@@ -734,7 +882,7 @@ muldivmod(struct jit_state* state, uint8_t opcode, int src, int dst, int32_t imm
     }
 
     // Load the divisor into RCX.
-    if (imm) {
+    if (!reg) {
         emit_load_imm(state, RCX, imm);
     } else {
         emit_mov(state, src, RCX);
@@ -828,12 +976,12 @@ muldivmod(struct jit_state* state, uint8_t opcode, int src, int dst, int32_t imm
     }
 }
 
-static void
-resolve_jumps(struct jit_state* state)
+static bool
+resolve_patchable_relatives(struct jit_state* state)
 {
     int i;
     for (i = 0; i < state->num_jumps; i++) {
-        struct jump jump = state->jumps[i];
+        struct patchable_relative jump = state->jumps[i];
 
         int target_loc;
         if (jump.target_offset != 0) {
@@ -852,42 +1000,119 @@ resolve_jumps(struct jit_state* state)
         uint8_t* offset_ptr = &state->buf[jump.offset_loc];
         memcpy(offset_ptr, &rel, sizeof(uint32_t));
     }
+
+    for (i = 0; i < state->num_local_calls; i++) {
+        struct patchable_relative local_call = state->local_calls[i];
+
+        int target_loc;
+        assert(local_call.target_offset == 0);
+        assert(local_call.target_pc != TARGET_PC_EXIT);
+        assert(local_call.target_pc != TARGET_PC_RETPOLINE);
+
+        target_loc = state->pc_locs[local_call.target_pc];
+
+        /* Assumes call offset is at end of instruction */
+        uint32_t rel = target_loc - (local_call.offset_loc + sizeof(uint32_t));
+        rel -= state->bpf_function_prolog_size; // For the prolog inserted at the start of every local call.
+
+        uint8_t* offset_ptr = &state->buf[local_call.offset_loc];
+        memcpy(offset_ptr, &rel, sizeof(uint32_t));
+    }
+
+    for (i = 0; i < state->num_loads; i++) {
+        struct patchable_relative load = state->loads[i];
+
+        int target_loc;
+        // It is only possible to load from the external dispatcher's position.
+        if (load.target_pc == TARGET_PC_EXTERNAL_DISPATCHER) {
+            target_loc = state->dispatcher_loc;
+        } else {
+            target_loc = -1;
+            return false;
+        }
+        /* Assumes load target is calculated relative to the end of instruction */
+        uint32_t rel = target_loc - (load.offset_loc + sizeof(uint32_t));
+
+        uint8_t* offset_ptr = &state->buf[load.offset_loc];
+        memcpy(offset_ptr, &rel, sizeof(uint32_t));
+    }
+
+    for (i = 0; i < state->num_leas; i++) {
+        struct patchable_relative lea = state->leas[i];
+
+        int target_loc;
+        // It is only possible to LEA from the helper table.
+        if (lea.target_pc == TARGET_LOAD_HELPER_TABLE) {
+            target_loc = state->helper_table_loc;
+        } else {
+            target_loc = -1;
+            return false;
+        }
+        /* Assumes lea target is calculated relative to the end of instruction */
+        uint32_t rel = target_loc - (lea.offset_loc + sizeof(uint32_t));
+
+        uint8_t* offset_ptr = &state->buf[lea.offset_loc];
+        memcpy(offset_ptr, &rel, sizeof(uint32_t));
+    }
+    return true;
 }
 
-int
-ubpf_translate_x86_64(struct ubpf_vm* vm, uint8_t* buffer, size_t* size, char** errmsg)
+struct ubpf_jit_result
+ubpf_translate_x86_64(struct ubpf_vm* vm, uint8_t* buffer, size_t* size, enum JitMode jit_mode)
 {
     struct jit_state state;
-    int result = -1;
+    struct ubpf_jit_result compile_result;
 
-    state.offset = 0;
-    state.size = *size;
-    state.buf = buffer;
-    state.pc_locs = calloc(UBPF_MAX_INSTS + 1, sizeof(state.pc_locs[0]));
-    state.jumps = calloc(UBPF_MAX_INSTS, sizeof(state.jumps[0]));
-    state.num_jumps = 0;
-
-    if (translate(vm, &state, errmsg) < 0) {
+    if (initialize_jit_state_result(&state, &compile_result, buffer, *size, jit_mode, &compile_result.errmsg) < 0) {
         goto out;
     }
 
-    if (state.num_jumps == UBPF_MAX_INSTS) {
-        *errmsg = ubpf_error("Excessive number of jump targets");
+    if (translate(vm, &state, &compile_result.errmsg) < 0) {
         goto out;
     }
 
-    if (state.offset == state.size) {
-        *errmsg = ubpf_error("Target buffer too small");
+    if (!resolve_patchable_relatives(&state)) {
+        compile_result.errmsg = ubpf_error("Could not patch the relative addresses in the JIT'd code");
         goto out;
     }
 
-    resolve_jumps(&state);
-    result = 0;
-
+    compile_result.compile_result = UBPF_JIT_COMPILE_SUCCESS;
+    compile_result.external_dispatcher_offset = state.dispatcher_loc;
+    compile_result.external_helper_offset = state.helper_table_loc;
+    compile_result.jit_mode = jit_mode;
     *size = state.offset;
 
 out:
-    free(state.pc_locs);
-    free(state.jumps);
-    return result;
+    release_jit_state_result(&state, &compile_result);
+    return compile_result;
+}
+
+bool
+ubpf_jit_update_dispatcher_x86_64(
+    struct ubpf_vm* vm, external_function_dispatcher_t new_dispatcher, uint8_t* buffer, size_t size, uint32_t offset)
+{
+    UNUSED_PARAMETER(vm);
+    uint64_t jit_upper_bound = (uint64_t)buffer + size;
+    void* dispatcher_address = (void*)((uint64_t)buffer + offset);
+    if ((uint64_t)dispatcher_address + sizeof(void*) < jit_upper_bound) {
+        memcpy(dispatcher_address, &new_dispatcher, sizeof(void*));
+        return true;
+    }
+
+    return false;
+}
+
+bool
+ubpf_jit_update_helper_x86_64(
+    struct ubpf_vm* vm, ext_func new_helper, unsigned int idx, uint8_t* buffer, size_t size, uint32_t offset)
+{
+    UNUSED_PARAMETER(vm);
+    uint64_t jit_upper_bound = (uint64_t)buffer + size;
+
+    void* dispatcher_address = (void*)((uint64_t)buffer + offset + (8 * idx));
+    if ((uint64_t)dispatcher_address + sizeof(void*) < jit_upper_bound) {
+        memcpy(dispatcher_address, &new_helper, sizeof(void*));
+        return true;
+    }
+    return false;
 }

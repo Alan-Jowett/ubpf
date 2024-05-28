@@ -176,6 +176,25 @@ map_relocation_bounds_check_function(void* user_context, uint64_t addr, uint64_t
     }
     return false;
 }
+/**
+ * @brief The handler to determine the stack usage of local functions.
+ *
+ * @param[in] vm Pointer to the VM of which the local function at pc is a part.
+ * @param[in] pc The instruction address of the local function.
+ * @param[in] cookie A pointer to the context cookie given when this callback
+ *                   was registered.
+ * @return The amount of stack used by the local function starting at pc.
+ */
+int
+stack_usage_calculator(const struct ubpf_vm* vm, uint16_t pc, void* cookie)
+{
+    (void)(pc);
+    (void)(cookie);
+    (void)(vm);
+    // This is sized large enough that the rel_64_32.bpf.c program has enough space
+    // for each local function!
+    return 32;
+}
 
 int
 main(int argc, char** argv)
@@ -283,6 +302,7 @@ main(int argc, char** argv)
 
     register_functions(vm);
 
+    ubpf_register_stack_usage_calculator(vm, stack_usage_calculator, NULL);
     /*
      * The ELF magic corresponds to an RSH instruction with an offset,
      * which is invalid.
@@ -516,14 +536,26 @@ bpf_map_delete_elem_impl(struct bpf_map* map, const void* key)
 static void
 register_functions(struct ubpf_vm* vm)
 {
-    ubpf_register(vm, 0, "gather_bytes", gather_bytes);
-    ubpf_register(vm, 1, "memfrob", memfrob);
-    ubpf_register(vm, 2, "trash_registers", trash_registers);
-    ubpf_register(vm, 3, "sqrti", sqrti);
-    ubpf_register(vm, 4, "strcmp_ext", strcmp);
-    ubpf_register(vm, 5, "unwind", unwind);
+    ubpf_register(vm, 0, "gather_bytes", as_external_function_t(gather_bytes));
+    ubpf_register(vm, 1, "memfrob", as_external_function_t(memfrob));
+    ubpf_register(vm, 2, "trash_registers", as_external_function_t(trash_registers));
+    ubpf_register(vm, 3, "sqrti", as_external_function_t(sqrti));
+    ubpf_register(vm, 4, "strcmp_ext", as_external_function_t(strcmp));
+    ubpf_register(vm, 5, "unwind", as_external_function_t(unwind));
     ubpf_set_unwind_function_index(vm, 5);
-    ubpf_register(vm, (unsigned int)(uintptr_t)bpf_map_lookup_elem, "bpf_map_lookup_elem", bpf_map_lookup_elem_impl);
-    ubpf_register(vm, (unsigned int)(uintptr_t)bpf_map_update_elem, "bpf_map_update_elem", bpf_map_update_elem_impl);
-    ubpf_register(vm, (unsigned int)(uintptr_t)bpf_map_delete_elem, "bpf_map_delete_elem", bpf_map_delete_elem_impl);
+    ubpf_register(
+        vm,
+        (unsigned int)(uintptr_t)bpf_map_lookup_elem,
+        "bpf_map_lookup_elem",
+        as_external_function_t(bpf_map_lookup_elem_impl));
+    ubpf_register(
+        vm,
+        (unsigned int)(uintptr_t)bpf_map_update_elem,
+        "bpf_map_update_elem",
+        as_external_function_t(bpf_map_update_elem_impl));
+    ubpf_register(
+        vm,
+        (unsigned int)(uintptr_t)bpf_map_delete_elem,
+        "bpf_map_delete_elem",
+        as_external_function_t(bpf_map_delete_elem_impl));
 }

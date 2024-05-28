@@ -60,13 +60,18 @@ jobs:
     runs-on: ${{ inputs.platform }}
 
     steps:
-    - uses: actions/checkout@v3
+    - name: Harden Runner
+      uses: step-security/harden-runner@f086349bfa2bd1361f7909c78558e816508cdc10 # v2.8.0
+      with:
+        egress-policy: audit
+
+    - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
       with:
         submodules: 'recursive'
 
     - name: Initialize CodeQL
       if: inputs.build_codeql == true
-      uses: github/codeql-action/init@0ba4244466797eb048eb91a6cd43d5c03ca8bd05
+      uses: github/codeql-action/init@9fdb3e49720b44c48891d036bb502feb25684276
       with:
         languages: 'cpp'
 
@@ -75,7 +80,7 @@ jobs:
       run: echo "VALUE=platform-${{ inputs.platform }}_arch=${{ inputs.arch }}_type-${{ inputs.build_type }}_sanitizers-${{ inputs.enable_sanitizers }}_coverage-${{ inputs.enable_coverage }}_scan_build-${{ inputs.scan_build }}_retpolines-${{ inputs.disable_retpolines }}" >> $GITHUB_OUTPUT
 
     - name: Update the cache (ccache)
-      uses: actions/cache@v3.3.1
+      uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
       with:
         path: ccache
         key: ${{ steps.cache_key.outputs.VALUE }}_ccache
@@ -86,7 +91,7 @@ jobs:
           ccache
 
     - name: Install system dependencies (Linux)
-      if: inputs.platform == 'ubuntu-20.04'
+      if: inputs.platform == 'ubuntu-latest'
       run: |
         sudo apt-get update
 
@@ -98,7 +103,7 @@ jobs:
           libboost-dev \
           libboost-program-options-dev \
           libboost-filesystem-dev \
-          libbpf-dev
+          libelf-dev
 
         if [[ "${{ inputs.scan_build }}" == "true" ]] ; then
           sudo apt-get install -y \
@@ -112,8 +117,13 @@ jobs:
             qemu-user
         fi
 
+    - name: Build/install libbpf From Source
+      if: inputs.platform == 'ubuntu-latest'
+      run: ./.github/scripts/build-libbpf.sh
+      shell: bash
+
     - name: Install system dependencies (macOS)
-      if: inputs.platform == 'macos-11'
+      if: inputs.platform == 'macos-latest'
       run: |
         brew install \
           cmake \
@@ -121,24 +131,6 @@ jobs:
           ccache \
           lcov \
           boost
-
-    # Build the bpf_conformance suite separately as it doesn't build in arm64.
-    - name: Configure bpf_conformance
-      run: |
-        export CCACHE_DIR="$(pwd)/ccache"
-
-        cmake \
-          -G Ninja \
-          -S external/bpf_conformance \
-          -B build_bpf_conformance
-
-    - name: Build bpf_conformance
-      run: |
-        export CCACHE_DIR="$(pwd)/ccache"
-
-        cmake \
-          --build build_bpf_conformance \
-          --config ${{ inputs.build_type }}
 
     - name: Configure uBPF
       run: |
@@ -165,8 +157,6 @@ jobs:
           -DUBPF_DISABLE_RETPOLINES=${{ inputs.disable_retpolines }} \
           -DUBPF_ENABLE_TESTS=true \
           -DUBPF_ENABLE_INSTALL=true \
-          -DUBPF_SKIP_EXTERNAL=true \
-          -DBPF_CONFORMANCE_RUNNER="$(pwd)/build_bpf_conformance/bin/bpf_conformance_runner" \
           ${arch_flags}
 
     - name: Build uBPF
@@ -183,7 +173,7 @@ jobs:
 
     - name: Upload scan-build report
       if: inputs.scan_build == true
-      uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce
+      uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
       with:
         name: scan-build_report
         path: ${{github.workspace}}/scan_build_report
@@ -202,20 +192,20 @@ jobs:
           --target test
 
     - name: Generate code coverage report
-      if: inputs.enable_coverage == true && inputs.platform == 'macos-11'
+      if: inputs.enable_coverage == true && inputs.platform == 'macos-latest'
       run: |
         mkdir -p coverage
         lcov --capture --directory build --include '${{env.GITHUB_WORKSPACE}}/ubpf_plugin' --include '${{env.GITHUB_WORKSPACE}}/vm' --output-file coverage/lcov.info --ignore-errors inconsistent
 
     - name: Generate code coverage report
-      if: inputs.enable_coverage == true && inputs.platform != 'macos-11'
+      if: inputs.enable_coverage == true && inputs.platform != 'macos-latest'
       run: |
         mkdir -p coverage
         lcov --capture --directory build --include '${{env.GITHUB_WORKSPACE}}/ubpf_plugin' --include '${{env.GITHUB_WORKSPACE}}/vm' --output-file coverage/lcov.info
 
     - name: Coveralls Parallel
       if: inputs.enable_coverage == true
-      uses: coverallsapp/github-action@v2.2.1
+      uses: coverallsapp/github-action@643bc377ffa44ace6394b2b5d0d3950076de9f63 # v2.3.0
       with:
         github-token: ${{ secrets.github_token }}
         flag-name: run-${{inputs.build_type}}-${{inputs.platform}}-${{inputs.arch}}
@@ -231,7 +221,7 @@ jobs:
           --target install
 
     - name: Generate the DEB package
-      if: inputs.platform == 'ubuntu-20.04'
+      if: inputs.platform == 'ubuntu-latest'
       run: |
         cmake \
           -S . \
@@ -244,7 +234,7 @@ jobs:
           --target package
 
     - name: Generate the RPM package
-      if: inputs.platform == 'ubuntu-20.04'
+      if: inputs.platform == 'ubuntu-latest'
       run: |
         cmake \
           -S . \
@@ -277,32 +267,32 @@ jobs:
         echo "REL_TGZ_PACKAGE_PATH=$(ls build/*.tar.gz)" >> $GITHUB_OUTPUT
 
     - name: Upload the DEB package
-      if: inputs.upload_packages == true && inputs.platform == 'ubuntu-20.04'
-      uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce
+      if: inputs.upload_packages == true && inputs.platform == 'ubuntu-latest'
+      uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
       with:
         name: linux_deb_package
         path: ${{ steps.package_locations.outputs.REL_DEB_PACKAGE_PATH }}
         retention-days: 5
 
     - name: Upload the RPM package
-      if: inputs.upload_packages == true && inputs.platform == 'ubuntu-20.04'
-      uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce
+      if: inputs.upload_packages == true && inputs.platform == 'ubuntu-latest'
+      uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
       with:
         name: linux_rpm_package
         path: ${{ steps.package_locations.outputs.REL_RPM_PACKAGE_PATH }}
         retention-days: 5
 
     - name: Upload the Linux TGZ package
-      if: inputs.upload_packages == true && inputs.platform == 'ubuntu-20.04'
-      uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce
+      if: inputs.upload_packages == true && inputs.platform == 'ubuntu-latest'
+      uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
       with:
         name: linux_tgz_package
         path: ${{ steps.package_locations.outputs.REL_TGZ_PACKAGE_PATH }}
         retention-days: 5
 
     - name: Upload the macOS TGZ package
-      if: inputs.upload_packages == true && inputs.platform == 'macos-11'
-      uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce
+      if: inputs.upload_packages == true && inputs.platform == 'macos-latest'
+      uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
       with:
         name: macos_tgz_package
         path: ${{ steps.package_locations.outputs.REL_TGZ_PACKAGE_PATH }}
@@ -310,4 +300,4 @@ jobs:
 
     - name: Perform CodeQL Analysis
       if: inputs.build_codeql == true
-      uses: github/codeql-action/analyze@0ba4244466797eb048eb91a6cd43d5c03ca8bd05
+      uses: github/codeql-action/analyze@9fdb3e49720b44c48891d036bb502feb25684276
