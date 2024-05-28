@@ -415,7 +415,7 @@ ubpf_mark_shadow_stack(
         for (size_t test_bit = offset; test_bit < offset + size; test_bit++) {
             // Convert test_bit into offset + mask to test against the shadow stack.
             size_t bit_offset = test_bit / 8;
-            size_t bit_mask = 1 << (test_bit % 8);
+            size_t bit_mask = 1ull << (test_bit % 8);
             shadow_stack[bit_offset] |= bit_mask;
         }
     }
@@ -456,7 +456,7 @@ ubpf_check_shadow_stack(
         for (size_t test_bit = offset; test_bit < offset + size; test_bit++) {
             // Convert test_bit into offset + mask to test against the shadow stack.
             size_t bit_offset = test_bit / 8;
-            size_t bit_mask = 1 << (test_bit % 8);
+            size_t bit_mask = 1ull << (test_bit % 8);
             if ((shadow_stack[bit_offset] & bit_mask) == 0) {
                 return false;
             }
@@ -781,11 +781,11 @@ ubpf_exec_ex(
             reg[inst.dst] &= UINT32_MAX;
             break;
         case EBPF_OP_ARSH_IMM:
-            reg[inst.dst] = (int32_t)reg[inst.dst] >> inst.imm;
+            reg[inst.dst] = (int32_t)reg[inst.dst] >> SHIFT_MASK_32_BIT(inst.imm);
             reg[inst.dst] &= UINT32_MAX;
             break;
         case EBPF_OP_ARSH_REG:
-            reg[inst.dst] = (int32_t)reg[inst.dst] >> u32(reg[inst.src]);
+            reg[inst.dst] = (int32_t)reg[inst.dst] >> SHIFT_MASK_32_BIT(reg[inst.src]);
             reg[inst.dst] &= UINT32_MAX;
             break;
 
@@ -878,10 +878,10 @@ ubpf_exec_ex(
             reg[inst.dst] = reg[inst.src];
             break;
         case EBPF_OP_ARSH64_IMM:
-            reg[inst.dst] = (int64_t)reg[inst.dst] >> inst.imm;
+            reg[inst.dst] = (int64_t)reg[inst.dst] >> SHIFT_MASK_64_BIT(inst.imm);
             break;
         case EBPF_OP_ARSH64_REG:
-            reg[inst.dst] = (int64_t)reg[inst.dst] >> reg[inst.src];
+            reg[inst.dst] = (int64_t)reg[inst.dst] >> SHIFT_MASK_64_BIT(reg[inst.src]);
             break;
 
             /*
