@@ -1863,7 +1863,7 @@ uint16_t
 ubpf_stack_usage_for_local_func(const struct ubpf_vm* vm, uint16_t pc)
 {
     uint16_t stack_usage = UBPF_EBPF_STACK_SIZE;
-    if (vm->local_func_stack_usage[pc].stack_usage_calculated) {
+    if (vm->local_func_stack_usage[pc].stack_usage) {
         stack_usage = vm->local_func_stack_usage[pc].stack_usage;
     }
     return stack_usage;
