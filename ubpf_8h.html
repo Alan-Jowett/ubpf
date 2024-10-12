@@ -121,6 +121,9 @@ Typedefs</h2></td></tr>
 <tr class="separator:a70fb644d080e8448c1db17bb99858391"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a64bd2f640f675e3eeff48ea52583d699"><td class="memItemLeft" align="right" valign="top">typedef bool(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="ubpf_8h.html#a64bd2f640f675e3eeff48ea52583d699">ubpf_bounds_check</a>) (void *context, uint64_t addr, uint64_t size)</td></tr>
 <tr class="separator:a64bd2f640f675e3eeff48ea52583d699"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5b194844e937155fee7888874173b0d9"><td class="memItemLeft" align="right" valign="top">typedef void(*&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="ubpf_8h.html#a5b194844e937155fee7888874173b0d9">ubpf_debug_fn</a>) (void *context, int program_counter, const uint64_t registers[16], const uint8_t *stack_start, size_t stack_length)</td></tr>
+<tr class="memdesc:a5b194844e937155fee7888874173b0d9"><td class="mdescLeft">&#160;</td><td class="mdescRight">A function to invoke before each instruction.  <a href="ubpf_8h.html#a5b194844e937155fee7888874173b0d9">More...</a><br /></td></tr>
+<tr class="separator:a5b194844e937155fee7888874173b0d9"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="enum-members"></a>
 Enumerations</h2></td></tr>
@@ -209,6 +212,9 @@ Functions</h2></td></tr>
 <tr class="memitem:a4033cc1ab40ffc0d3de6efb70bb91768"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="ubpf_8h.html#a4033cc1ab40ffc0d3de6efb70bb91768">ubpf_toggle_undefined_behavior_check</a> (struct ubpf_vm *vm, bool enable)</td></tr>
 <tr class="memdesc:a4033cc1ab40ffc0d3de6efb70bb91768"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enable or disable undefined behavior checks. Undefined behavior includes reading from uninitialized memory or using uninitialized registers. Default is disabled to preserve performance and compatibility with existing eBPF programs.  <a href="ubpf_8h.html#a4033cc1ab40ffc0d3de6efb70bb91768">More...</a><br /></td></tr>
 <tr class="separator:a4033cc1ab40ffc0d3de6efb70bb91768"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aae07506453000ed9fc787a27fa3b9f9e"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="ubpf_8h.html#aae07506453000ed9fc787a27fa3b9f9e">ubpf_register_debug_fn</a> (struct ubpf_vm *vm, void *context, <a class="el" href="ubpf_8h.html#a5b194844e937155fee7888874173b0d9">ubpf_debug_fn</a> debug_function)</td></tr>
+<tr class="memdesc:aae07506453000ed9fc787a27fa3b9f9e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Add option to invoke a debug function before each instruction. Note: This only applies to the interpreter and not the JIT.  <a href="ubpf_8h.html#aae07506453000ed9fc787a27fa3b9f9e">More...</a><br /></td></tr>
+<tr class="separator:aae07506453000ed9fc787a27fa3b9f9e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Macro Definition Documentation</h2>
 <a id="ae89d6c1d7d2bda6006e9969e731826a3"></a>
@@ -379,6 +385,32 @@ Functions</h2></td></tr>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>uint64_t The value to insert into the BPF program. </dd></dl>
+
+</div>
+</div>
+<a id="a5b194844e937155fee7888874173b0d9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5b194844e937155fee7888874173b0d9">&#9670;&nbsp;</a></span>ubpf_debug_fn</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef void(* ubpf_debug_fn) (void *context, int program_counter, const uint64_t registers[16], const uint8_t *stack_start, size_t stack_length)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>A function to invoke before each instruction. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in,out]</td><td class="paramname">context</td><td>Context passed in to ubpf_register_debug_fn. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">program_counter</td><td>Current instruction pointer. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">registers</td><td>Array of 11 registers representing the VM state. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">stack_start</td><td>Pointer to the beginning of the stack. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">stack_length</td><td>Size of the stack in bytes. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -1012,6 +1044,52 @@ Functions</h2></td></tr>
   </dd>
 </dl>
 <dl class="section return"><dt>Returns</dt><dd>int The value to insert into the BPF program. </dd></dl>
+
+</div>
+</div>
+<a id="aae07506453000ed9fc787a27fa3b9f9e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aae07506453000ed9fc787a27fa3b9f9e">&#9670;&nbsp;</a></span>ubpf_register_debug_fn()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">int ubpf_register_debug_fn </td>
+          <td>(</td>
+          <td class="paramtype">struct ubpf_vm *&#160;</td>
+          <td class="paramname"><em>vm</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>context</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="ubpf_8h.html#a5b194844e937155fee7888874173b0d9">ubpf_debug_fn</a>&#160;</td>
+          <td class="paramname"><em>debug_function</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Add option to invoke a debug function before each instruction. Note: This only applies to the interpreter and not the JIT. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">vm</td><td>VM to add the option to. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">debug_fn</td><td>Function to invoke before each instruction. Pass NULL to remove the function. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="section return"><dt>Returns</dt><dd>0 on success. </dd>
+<dd>
+-1 on failure. </dd></dl>
 
 </div>
 </div>
