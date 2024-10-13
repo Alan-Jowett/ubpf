@@ -10,14 +10,33 @@
 #include <string>
 #include <sstream>
 
+#include "asm_unmarshal.hpp"
+#include "crab_verifier.hpp"
+#include "platform.hpp"
+
 extern "C"
 {
+#define ebpf_inst ebpf_inst_ubpf
 #include "ebpf.h"
 #include "ubpf.h"
+#undef ebpf_inst
 }
 
 #include "test_helpers.h"
 #include <cassert>
+
+ebpf_platform_t g_ebpf_platform_ubpf_fuzzer = {
+    .get_program_type = nullptr,
+    .get_helper_prototype = nullptr,
+    .is_helper_usable = nullptr,
+    .map_record_size = 0,
+    .parse_maps_section = nullptr,
+    .get_map_descriptor = nullptr,
+    .get_map_type = nullptr,
+    .resolve_inner_map_references = nullptr,
+    .supported_conformance_groups = bpf_conformance_groups_t::default_groups,
+};
+
 
 uint64_t test_helpers_dispatcher(uint64_t p0, uint64_t p1,uint64_t p2,uint64_t p3, uint64_t p4, unsigned int idx, void* cookie) {
     UNREFERENCED_PARAMETER(cookie);
@@ -40,6 +59,32 @@ int null_printf(FILE* stream, const char* format, ...)
         return 0;
     }
     return 0;
+}
+
+bool verify_bpf_byte_code(const std::vector<uint8_t>& program_code)
+{
+    std::ostringstream error;
+    auto instruction_array = reinterpret_cast<const ebpf_inst*>(program_code.data());
+    size_t instruction_count = program_code.size() / sizeof(ebpf_inst);
+    const ebpf_platform_t* platform = &g_ebpf_platform_ubpf_fuzzer;
+    std::vector<ebpf_inst> instructions{instruction_array, instruction_array + instruction_count};
+    program_info info{platform};
+    std::string section;
+    std::string file;
+    raw_program raw_prog{file, section, 0, {}, instructions, info};
+
+    std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);
+    if (!std::holds_alternative<InstructionSeq>(prog_or_error)) {
+        std::cout << "Failed to unmarshal program : " << std::get<std::string>(prog_or_error) << std::endl;
+        return false;
+    }
+    InstructionSeq& prog = std::get<InstructionSeq>(prog_or_error);
+
+    // First try optimized for the success case.
+    ebpf_verifier_options_t options = ebpf_verifier_default_options;
+    ebpf_verifier_stats_t stats;
+    options.check_termination = true;
+    return ebpf_verify_program(std::cout, prog, raw_prog.info, &options, &stats);
 }
 
 typedef std::unique_ptr<ubpf_vm, decltype(&ubpf_destroy)> ubpf_vm_ptr;
@@ -238,6 +283,11 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, std::size_t size)
     if (!split_input(data, size, program, memory)) {
         // The input is invalid. Not interesting.
         return -1;
+    }
+
+    if (!verify_bpf_byte_code(program)) {
+        // The program failed verification.
+        return 0;
     }
 
     uint64_t interpreter_result = 0;

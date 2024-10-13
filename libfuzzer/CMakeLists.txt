@@ -13,17 +13,24 @@ add_executable(
     libfuzz_harness.cc
 )
 
+message(STATUS "GSL_INCLUDE_DIRS: ${CMAKE_BINARY_DIR}/gsl-src/include")
+
 target_include_directories("ubpf_fuzzer" PRIVATE
     "${CMAKE_SOURCE_DIR}/vm"
     "${CMAKE_BINARY_DIR}/vm"
+    "${CMAKE_BINARY_DIR}/_deps/gsl-src/include"
     "${CMAKE_SOURCE_DIR}/vm/inc"
     "${CMAKE_BINARY_DIR}/vm/inc"
     "${CMAKE_SOURCE_DIR}/ubpf_plugin"
+    "${CMAKE_SOURCE_DIR}/external/ebpf-verifier/src"
+    "${CMAKE_SOURCE_DIR}/external/ebpf-verifier/src/crab"
+    "${CMAKE_SOURCE_DIR}/external/ebpf-verifier/src/crab_utils"
 )
 
 target_link_libraries(
     ubpf_fuzzer
     ubpf
     ubpf_settings
+    ebpfverifier
 )
 
