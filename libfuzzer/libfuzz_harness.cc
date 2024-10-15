@@ -25,14 +25,55 @@ extern "C"
 #include "test_helpers.h"
 #include <cassert>
 
+ebpf_context_descriptor_t g_ebpf_context_descriptor_ubpf = {
+    .size = 16,
+    .data = 0,
+    .end = 8,
+    .meta = -1,
+};
+
+EbpfProgramType g_ubpf_program_type = {
+    .name = "ubpf",
+    .context_descriptor = &g_ebpf_context_descriptor_ubpf,
+    .platform_specific_data = 0,
+    .section_prefixes = {},
+    .is_privileged = false,
+};
+
+EbpfProgramType ubpf_get_program_type(const std::string& section, const std::string& path)
+{
+    UNREFERENCED_PARAMETER(section);
+    UNREFERENCED_PARAMETER(path);
+    return g_ubpf_program_type;
+}
+
+EbpfMapType ubpf_get_map_type(uint32_t platform_specific_type)
+{
+    UNREFERENCED_PARAMETER(platform_specific_type);
+    return {};
+}
+
+EbpfHelperPrototype ubpf_get_helper_prototype(int32_t n)
+{
+    UNREFERENCED_PARAMETER(n);
+    return {};
+}
+
+bool ubpf_is_helper_usable(int32_t n)
+{
+    UNREFERENCED_PARAMETER(n);
+    return false;
+}
+
+
 ebpf_platform_t g_ebpf_platform_ubpf_fuzzer = {
-    .get_program_type = nullptr,
-    .get_helper_prototype = nullptr,
-    .is_helper_usable = nullptr,
+    .get_program_type = ubpf_get_program_type,
+    .get_helper_prototype = ubpf_get_helper_prototype,
+    .is_helper_usable = ubpf_is_helper_usable,
     .map_record_size = 0,
     .parse_maps_section = nullptr,
     .get_map_descriptor = nullptr,
-    .get_map_type = nullptr,
+    .get_map_type = ubpf_get_map_type,
     .resolve_inner_map_references = nullptr,
     .supported_conformance_groups = bpf_conformance_groups_t::default_groups,
 };
@@ -62,20 +103,24 @@ int null_printf(FILE* stream, const char* format, ...)
 }
 
 bool verify_bpf_byte_code(const std::vector<uint8_t>& program_code)
+try
 {
     std::ostringstream error;
     auto instruction_array = reinterpret_cast<const ebpf_inst*>(program_code.data());
     size_t instruction_count = program_code.size() / sizeof(ebpf_inst);
     const ebpf_platform_t* platform = &g_ebpf_platform_ubpf_fuzzer;
     std::vector<ebpf_inst> instructions{instruction_array, instruction_array + instruction_count};
-    program_info info{platform};
+    program_info info{
+        .platform = platform,
+        .type = g_ubpf_program_type,
+    };
     std::string section;
     std::string file;
     raw_program raw_prog{file, section, 0, {}, instructions, info};
 
     std::variant<InstructionSeq, std::string> prog_or_error = unmarshal(raw_prog);
     if (!std::holds_alternative<InstructionSeq>(prog_or_error)) {
-        std::cout << "Failed to unmarshal program : " << std::get<std::string>(prog_or_error) << std::endl;
+        //std::cout << "Failed to unmarshal program : " << std::get<std::string>(prog_or_error) << std::endl;
         return false;
     }
     InstructionSeq& prog = std::get<InstructionSeq>(prog_or_error);
@@ -84,7 +129,16 @@ bool verify_bpf_byte_code(const std::vector<uint8_t>& program_code)
     ebpf_verifier_options_t options = ebpf_verifier_default_options;
     ebpf_verifier_stats_t stats;
     options.check_termination = true;
-    return ebpf_verify_program(std::cout, prog, raw_prog.info, &options, &stats);
+    options.store_pre_invariants = true;
+    options.simplify = false;
+
+    std::ostringstream error_stream;
+
+    return ebpf_verify_program(error_stream, prog, raw_prog.info, &options, &stats);
+}
+catch (const std::exception& ex)
+{
+    return false;
 }
 
 typedef std::unique_ptr<ubpf_vm, decltype(&ubpf_destroy)> ubpf_vm_ptr;
@@ -140,6 +194,40 @@ ubpf_vm_ptr create_ubpf_vm(const std::vector<uint8_t>& program_code)
     return vm;
 }
 
+void
+ubpf_debug_function(
+    void* context, int program_counter, const uint64_t registers[16], const uint8_t* stack_start, size_t stack_length)
+{
+    UNREFERENCED_PARAMETER(context);
+    UNREFERENCED_PARAMETER(registers);
+    UNREFERENCED_PARAMETER(stack_start);
+    UNREFERENCED_PARAMETER(stack_length);
+
+    std::string label = std::to_string(program_counter) + ":-1";
+
+    if (program_counter == 0) {
+        return;
+    }
+
+    std::set<std::string> constraints;
+    for (int i = 0; i < 10; i++) {
+        constraints.insert("r" + std::to_string(i) + ".uvalue=" + std::to_string(registers[i]));
+        constraints.insert("r" + std::to_string(i) + ".svalue=" + std::to_string(registers[i]));
+    }
+
+    // Build set of string constraints from the register values.
+
+    // Call ebpf_check_constraints_at_label with the set of string constraints at this label.
+
+    std::ostringstream os;
+
+    if (!ebpf_check_constraints_at_label(os, label, constraints)) {
+        std::cerr << "Label: " << label << std::endl;
+        std::cerr << os.str() << std::endl;
+        throw std::runtime_error("ebpf_check_constraints_at_label failed");
+    }
+}
+
 /**
  * @brief Invoke the ubpf interpreter with the given program code and input memory.
  *
@@ -158,6 +246,8 @@ bool call_ubpf_interpreter(const std::vector<uint8_t>& program_code, std::vector
         // VM creation failed.
         return false;
     }
+
+    ubpf_register_debug_fn(vm.get(), nullptr, ubpf_debug_function);
 
     // Execute the program using the input memory.
     if (ubpf_exec_ex(vm.get(), memory.data(), memory.size(), &interpreter_result, ubpf_stack.data(), ubpf_stack.size()) != 0) {
