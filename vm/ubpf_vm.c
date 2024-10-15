@@ -679,7 +679,7 @@ ubpf_exec_ex(
 
         // Invoke the debug function to allow the user to inspect the state of the VM if it is enabled.
         if (vm->debug_function) {
-            vm->debug_function(vm->debug_function_context, cur_pc, reg, stack_start, stack_length);
+            vm->debug_function(vm->debug_function_context, cur_pc, reg, stack_start, stack_length, shadow_registers);
         }
 
         if (!ubpf_validate_shadow_register(vm, &shadow_registers, inst)) {

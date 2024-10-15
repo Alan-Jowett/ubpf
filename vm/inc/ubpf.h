@@ -577,7 +577,8 @@ extern "C"
         int program_counter,
         const uint64_t registers[16],
         const uint8_t* stack_start,
-        size_t stack_length);
+        size_t stack_length,
+        uint64_t register_mask);
 
     /**
      * @brief Add option to invoke a debug function before each instruction.

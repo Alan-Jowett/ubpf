@@ -25,12 +25,21 @@ extern "C"
 #include "test_helpers.h"
 #include <cassert>
 
+typedef struct _ubpf_context
+{
+    uint64_t data;
+    uint64_t data_end;
+    uint64_t stack_start;
+    uint64_t stack_end;
+} ubpf_context_t;
+
 ebpf_context_descriptor_t g_ebpf_context_descriptor_ubpf = {
-    .size = 16,
+    .size = sizeof(ubpf_context_t),
     .data = 0,
     .end = 8,
     .meta = -1,
 };
+
 
 EbpfProgramType g_ubpf_program_type = {
     .name = "ubpf",
@@ -194,12 +203,27 @@ ubpf_vm_ptr create_ubpf_vm(const std::vector<uint8_t>& program_code)
     return vm;
 }
 
+
+bool ubpf_is_packet(ubpf_context_t* context, uint64_t register_value)
+{
+    return register_value >= context->data && register_value < context->data_end;
+}
+
+bool ubpf_is_context(ubpf_context_t* context, uint64_t register_value)
+{
+    return register_value >= reinterpret_cast<uint64_t>(context) && register_value < reinterpret_cast<uint64_t>(context) + sizeof(ubpf_context_t);
+}
+
+bool ubpf_is_stack(ubpf_context_t* context, uint64_t register_value)
+{
+    return register_value >= context->stack_start && register_value < context->stack_end;
+}
+
 void
 ubpf_debug_function(
-    void* context, int program_counter, const uint64_t registers[16], const uint8_t* stack_start, size_t stack_length)
+    void* context, int program_counter, const uint64_t registers[16], const uint8_t* stack_start, size_t stack_length, uint64_t register_mask)
 {
-    UNREFERENCED_PARAMETER(context);
-    UNREFERENCED_PARAMETER(registers);
+    ubpf_context_t* ubpf_context = reinterpret_cast<ubpf_context_t*>(context);
     UNREFERENCED_PARAMETER(stack_start);
     UNREFERENCED_PARAMETER(stack_length);
 
@@ -209,13 +233,33 @@ ubpf_debug_function(
         return;
     }
 
+    // Build set of string constraints from the register values.
     std::set<std::string> constraints;
     for (int i = 0; i < 10; i++) {
-        constraints.insert("r" + std::to_string(i) + ".uvalue=" + std::to_string(registers[i]));
-        constraints.insert("r" + std::to_string(i) + ".svalue=" + std::to_string(registers[i]));
+        if ((register_mask & (1 << i)) == 0) {
+            continue;
+        }
+        uint64_t reg = registers[i];
+        std::string register_name = "r" + std::to_string(i);
+
+        if (ubpf_is_packet(ubpf_context, reg)) {
+            constraints.insert(register_name + ".type=packet");
+            constraints.insert(register_name + ".packet_offset=" + std::to_string(reg - ubpf_context->data));
+            constraints.insert(register_name +".packet_size=" + std::to_string(ubpf_context->data_end - ubpf_context->data));
+        }
+        else if (ubpf_is_context(ubpf_context, reg)) {
+            constraints.insert(register_name + ".type=ctx");
+            constraints.insert(register_name + ".ctx_offset=" + std::to_string(reg - reinterpret_cast<uint64_t>(ubpf_context)));
+        } else if (ubpf_is_stack(ubpf_context, reg)) {
+            constraints.insert(register_name + ".type=stack");
+            constraints.insert(register_name + ".stack_offset=" + std::to_string(reg - ubpf_context->stack_start));
+        }
+        else {
+            constraints.insert("r" + std::to_string(i) + ".uvalue=" + std::to_string(registers[i]));
+            constraints.insert("r" + std::to_string(i) + ".svalue=" + std::to_string(static_cast<int64_t>(registers[i])));
+        }
     }
 
-    // Build set of string constraints from the register values.
 
     // Call ebpf_check_constraints_at_label with the set of string constraints at this label.
 
@@ -226,6 +270,17 @@ ubpf_debug_function(
         std::cerr << os.str() << std::endl;
         throw std::runtime_error("ebpf_check_constraints_at_label failed");
     }
+}
+
+
+ubpf_context_t ubpf_context_from(std::vector<uint8_t>& memory, std::vector<uint8_t>& ubpf_stack)
+{
+    ubpf_context_t context;
+    context.data = reinterpret_cast<uint64_t>(memory.data());
+    context.data_end = context.data + memory.size();
+    context.stack_start = reinterpret_cast<uint64_t>(ubpf_stack.data());
+    context.stack_end = context.stack_start + ubpf_stack.size();
+    return context;
 }
 
 /**
@@ -242,15 +297,17 @@ bool call_ubpf_interpreter(const std::vector<uint8_t>& program_code, std::vector
 {
     auto vm = create_ubpf_vm(program_code);
 
+    ubpf_context_t context = ubpf_context_from(memory, ubpf_stack);
+
     if (vm == nullptr) {
         // VM creation failed.
         return false;
     }
 
-    ubpf_register_debug_fn(vm.get(), nullptr, ubpf_debug_function);
+    ubpf_register_debug_fn(vm.get(), &context, ubpf_debug_function);
 
     // Execute the program using the input memory.
-    if (ubpf_exec_ex(vm.get(), memory.data(), memory.size(), &interpreter_result, ubpf_stack.data(), ubpf_stack.size()) != 0) {
+    if (ubpf_exec_ex(vm.get(), &context, 0, &interpreter_result, ubpf_stack.data(), ubpf_stack.size()) != 0) {
         // VM execution failed.
         return false;
     }
@@ -273,6 +330,8 @@ bool call_ubpf_jit(const std::vector<uint8_t>& program_code, std::vector<uint8_t
 {
     auto vm = create_ubpf_vm(program_code);
 
+    ubpf_context_t context = ubpf_context_from(memory, ubpf_stack);
+
     char* error_message = nullptr;
 
     if (vm == nullptr) {
@@ -289,7 +348,7 @@ bool call_ubpf_jit(const std::vector<uint8_t>& program_code, std::vector<uint8_t
         return false;
     }
 
-    jit_result = fn(memory.data(), memory.size(), ubpf_stack.data(), ubpf_stack.size());
+    jit_result = fn(&context, 0, ubpf_stack.data(), ubpf_stack.size());
 
     // Compilation succeeded.
     return true;
