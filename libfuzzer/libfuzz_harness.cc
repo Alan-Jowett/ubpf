@@ -657,8 +657,6 @@ bool bounds_check(void* context, uint64_t addr, uint64_t size)
 }
 
 const std::set<std::string> g_error_message_to_ignore{
-    "Call to local function at pc [0-9]+ is not from a call instruction.",
-    "Instruction limit exceeded",
 };
 
 /**
