@@ -1390,8 +1390,6 @@ ubpf_exec_ex(
         if (((inst.opcode & EBPF_CLS_MASK) == EBPF_CLS_ALU) && (inst.opcode & EBPF_ALU_OP_MASK) != 0xd0) {
             reg[inst.dst] &= UINT32_MAX;
         }
-        // Save the previous instruction for detecting falling through to the start of another function.
-        previous_inst = inst;
     }
 
 cleanup:
