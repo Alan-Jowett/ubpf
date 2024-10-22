@@ -653,8 +653,6 @@ ubpf_exec_ex(
     void* external_dispatcher_cookie = mem;
     void* shadow_stack = NULL;
 
-    struct ebpf_inst previous_inst = {.opcode = 0};
-
     if (!insts) {
         /* Code must be loaded before we can execute */
         return -1;
