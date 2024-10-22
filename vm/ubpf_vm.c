@@ -2066,10 +2066,13 @@ static bool check_for_self_contained_sub_programs(const struct ebpf_inst* insts,
                     // The EXIT instruction is assumed to be the end of the sub-program.
                     break;
                 default: {
+                    // Compute jump target and bounds:
                     uint32_t jump_target = j + 1 + insts[j].offset;
+                    uint32_t jump_target_lower_bound = start_index;
+                    uint32_t jump_target_upper_bound = end_index - 1;
 
                     // All other jumps must to be within the same sub-program.
-                    if (jump_target < start_index || jump_target >= end_index) {
+                    if (jump_target < jump_target_lower_bound || jump_target > jump_target_upper_bound) {
                         *errmsg = ubpf_error("jump out of bounds at PC %d", j);
                         goto exit;
                     }
@@ -2081,7 +2084,10 @@ static bool check_for_self_contained_sub_programs(const struct ebpf_inst* insts,
             }
         }
         // Last instruction of the sub-program must be EXIT or a jump to the current program.
-        if (!((insts[end_index - 1].opcode == EBPF_OP_EXIT) || (insts[end_index - 2].opcode == EBPF_OP_JA))) {
+        bool ends_with_exit = insts[end_index - 1].opcode == EBPF_OP_EXIT;
+        bool ends_with_jump = insts[end_index - 2].opcode == EBPF_OP_JA;
+
+        if (!(ends_with_exit || ends_with_jump)) {
             *errmsg = ubpf_error("sub-program does not end with EXIT at PC %d", end_index - 1);
             goto exit;
         }
