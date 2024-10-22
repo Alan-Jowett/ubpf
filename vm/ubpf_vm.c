@@ -2077,15 +2077,13 @@ static bool check_for_self_contained_sub_programs(const struct ebpf_inst* insts,
                 };
                 break;
             default:
-                // Fall through from end_index-1 to end_index is not allowed.
-                // If this is the last instruction of the sub-program, it must be an jump or exit.
-                if (j == (end_index - 1)) {
-                    // Program can not fall through to the start of another sub-program.
-                    *errmsg = ubpf_error("fall through to start of another sub-program at PC %d", j);
-                    goto exit;
-                }
                 break;
             }
+        }
+        // Last instruction of the sub-program must be EXIT or a jump to the current program.
+        if (!((insts[end_index - 1].opcode == EBPF_OP_EXIT) || (insts[end_index - 2].opcode == EBPF_OP_JA))) {
+            *errmsg = ubpf_error("sub-program does not end with EXIT at PC %d", end_index - 1);
+            goto exit;
         }
     }
 
