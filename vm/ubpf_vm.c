@@ -1976,7 +1976,15 @@ ubpf_register_debug_fn(struct ubpf_vm* vm, void* context, ubpf_debug_fn debug_fu
  */
 static int compare_uint32_t(const void* a, const void* b)
 {
-    return (*(uint32_t*)a - *(uint32_t*)b);
+    uint32_t value_a = *(uint32_t*)a;
+    uint32_t value_b = *(uint32_t*)b;
+    if (value_a < value_b) {
+        return -1;
+    } else if (value_a > value_b) {
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 /**
@@ -2003,9 +2011,9 @@ static void deduplicate_array_of_uint32(uint32_t* array, uint32_t* count)
 static bool check_for_self_contained_sub_programs(const struct ubpf_vm* vm, const struct ebpf_inst* insts, uint32_t num_insts, char** errmsg)
 {
     UNREFERENCED_PARAMETER(vm);
-    int local_call_count = 0;
-    int sub_program_count = 0;
-    int * sub_program_start_indices = NULL;
+    uint32_t local_call_count = 0;
+    uint32_t sub_program_count = 0;
+    uint32_t * sub_program_start_indices = NULL;
     bool result = false;
     int32_t read_index = 0;
     int32_t write_index = 0;
@@ -2051,11 +2059,12 @@ static bool check_for_self_contained_sub_programs(const struct ubpf_vm* vm, cons
     // For each sub-program, check for jumps that go outside of the sub-program.
 
     for (uint32_t i = 0; i < sub_program_count; i++) {
-        uint32_t start_index = sub_program_start_indices[i];
-        uint32_t end_index = (i == sub_program_count - 1) ? num_insts : sub_program_start_indices[i + 1];
+        uint32_t start_index = sub_program_start_indices[i]; ///< First instruction of the sub-program.
+        uint32_t end_index = (i == sub_program_count - 1) ? num_insts : sub_program_start_indices[i + 1]; ///< First instruction after the sub-program.
 
         for (uint32_t j = start_index; j < end_index; j++) {
             switch (insts[j].opcode & EBPF_CLS_MASK) {
+            // Only jumps with a target in the range [start_index, end_index) are allowed.
             case EBPF_CLS_JMP:
             case EBPF_CLS_JMP32:
                 switch (insts[j].opcode) {
@@ -2067,9 +2076,9 @@ static bool check_for_self_contained_sub_programs(const struct ubpf_vm* vm, cons
                     break;
                 default: {
                     uint32_t jump_target = j + 1 + insts[j].offset;
-                    
+
                     // All other jumps must to be within the same sub-program.
-                    if (jump_target < start_index || jump_target > end_index) {
+                    if (jump_target < start_index || jump_target >= end_index) {
                         *errmsg = ubpf_error("jump out of bounds at PC %d", j);
                         goto exit;
                     }
@@ -2077,7 +2086,9 @@ static bool check_for_self_contained_sub_programs(const struct ubpf_vm* vm, cons
                 };
                 break;
             default:
-                if (j == end_index) {
+                // Fall through from end_index-1 to end_index is not allowed.
+                // If this is the last instruction of the sub-program, it must be an jump or exit.
+                if (j == (end_index - 1)) {
                     // Program can not fall through to the start of another sub-program.
                     *errmsg = ubpf_error("fall through to start of another sub-program at PC %d", j);
                     goto exit;

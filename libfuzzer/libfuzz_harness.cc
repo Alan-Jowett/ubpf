@@ -814,7 +814,7 @@ split_input(const uint8_t* data, std::size_t size, std::vector<uint8_t>& program
  * @retval 0 The input is valid and processed.
  */
 int
-LLVMFuzzerTestOneInput(const uint8_t* data, std::size_t size)
+LLVMFuzzerTestOneInput(const uint8_t* data, std::size_t size) try
 {
     // Assume the fuzzer input is as follows:
     // 32-bit program length
@@ -876,4 +876,8 @@ LLVMFuzzerTestOneInput(const uint8_t* data, std::size_t size)
     // Program executed successfully.
     // Add it to the corpus as it may be interesting.
     return 0;
+}
+catch (const std::exception& ex) {
+    std::cerr << "Exception: " << ex.what() << std::endl;
+    throw;
 }
