@@ -1427,14 +1427,13 @@ ubpf_exec(const struct ubpf_vm* vm, void* mem, size_t mem_len, uint64_t* bpf_ret
  * @brief Check if the BPF byte code sequence consists of self-contained sub-programs.
  * This means programs that only enter via a call and leave via the EXIT instruction (no jumps out of one program into another).
  *
- * @param[in] vm VM instance
  * @param[in] insts Array of instructions
  * @param[in] num_insts Count of instructions
  * @param[out] errmsg Error message
  * @retval true if the program consists of self-contained sub-programs.
  * @return false if the program contains jumps out of one program into another.
  */
-static bool check_for_self_contained_sub_programs(const struct ubpf_vm* vm, const struct ebpf_inst* insts, uint32_t num_insts, char** errmsg);
+static bool check_for_self_contained_sub_programs(const struct ebpf_inst* insts, uint32_t num_insts, char** errmsg);
 
 static bool
 validate(const struct ubpf_vm* vm, const struct ebpf_inst* insts, uint32_t num_insts, char** errmsg)
@@ -1719,7 +1718,7 @@ validate(const struct ubpf_vm* vm, const struct ebpf_inst* insts, uint32_t num_i
     }
 
     // If the program is syntactically valid, check if it consists of self-contained sub-programs.
-    return check_for_self_contained_sub_programs(vm, insts, num_insts, errmsg);
+    return check_for_self_contained_sub_programs(insts, num_insts, errmsg);
 }
 
 static bool
@@ -1995,12 +1994,11 @@ static int compare_uint32_t(const void* a, const void* b)
  */
 static void deduplicate_array_of_uint32(uint32_t* array, uint32_t* count)
 {
-    uint32_t read_index = 1;
     uint32_t write_index = 0;
 
     qsort(array, *count, sizeof(uint32_t), compare_uint32_t);
 
-    for (read_index = 1; read_index < *count; read_index++) {
+    for (uint32_t read_index = 1; read_index < *count; read_index++) {
         if (array[read_index] != array[write_index]) {
             array[++write_index] = array[read_index];
         }
@@ -2008,15 +2006,12 @@ static void deduplicate_array_of_uint32(uint32_t* array, uint32_t* count)
     *count = write_index + 1;
 }
 
-static bool check_for_self_contained_sub_programs(const struct ubpf_vm* vm, const struct ebpf_inst* insts, uint32_t num_insts, char** errmsg)
+static bool check_for_self_contained_sub_programs(const struct ebpf_inst* insts, uint32_t num_insts, char** errmsg)
 {
-    UNREFERENCED_PARAMETER(vm);
     uint32_t local_call_count = 0;
     uint32_t sub_program_count = 0;
     uint32_t * sub_program_start_indices = NULL;
     bool result = false;
-    int32_t read_index = 0;
-    int32_t write_index = 0;
 
     // Count the number of calls to local functions as a proxy for the number of sub-programs.
     // Call targets are assumed to define the start of a sub-program and sub-programs are assumed to end at the next call target or at the end of the program.
