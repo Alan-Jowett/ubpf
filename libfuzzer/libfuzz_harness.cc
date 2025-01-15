@@ -359,20 +359,29 @@ try {
 
     // Enable termination checking and pre-invariant storage.
     options.cfg_opts.check_for_termination = true;
-    options.cfg_opts.simplify = false;
-    options.print_invariants = g_ubpf_fuzzer_options.get("UBPF_FUZZER_PRINT_VERIFIER_REPORT");
-    options.print_failures = g_ubpf_fuzzer_options.get("UBPF_FUZZER_PRINT_VERIFIER_REPORT");
-    options.store_pre_invariants = g_ubpf_fuzzer_options.get("UBPF_FUZZER_CONSTRAINT_CHECK");
+    options.verbosity_opts.simplify = false;
+    options.verbosity_opts.print_invariants = g_ubpf_fuzzer_options.get("UBPF_FUZZER_PRINT_VERIFIER_REPORT");
+    options.verbosity_opts.print_failures = g_ubpf_fuzzer_options.get("UBPF_FUZZER_PRINT_VERIFIER_REPORT");
 
     ebpf_verifier_stats_t stats;
 
     std::ostringstream error_stream;
 
+    // Convert the instruction sequence to a control-flow graph.
+    auto program = Program::from_sequence(prog, info, options.cfg_opts);
+
     // Verify the program. This will return false or throw an exception if the program is invalid.
-    bool result = ebpf_verify_program(error_stream, prog, raw_prog.info, options, &stats);
+    auto invariants = analyze(program);
+
+    bool result = invariants.verified(program);
+
     if (g_ubpf_fuzzer_options.get("UBPF_FUZZER_PRINT_VERIFIER_REPORT")) {
+        auto report = invariants.check_assertions(program);
+        print_warnings(error_stream, report);
+
+        print_invariants(error_stream, program, false, invariants);
+
         std::cout << "verifier stats:" << std::endl;
-        std::cout << "total_unreachable: " << stats.total_unreachable << std::endl;
         std::cout << "total_warnings: " << stats.total_warnings << std::endl;
         std::cout << "max_loop_count: " << stats.max_loop_count << std::endl;
         std::cout << "result: " << result << std::endl;
@@ -526,94 +535,94 @@ ubpf_debug_function(
     }
 
 
-    if (g_ubpf_fuzzer_options.get("UBPF_FUZZER_CONSTRAINT_CHECK")) {
-        ubpf_context_t* ubpf_context = reinterpret_cast<ubpf_context_t*>(context);
-        UNREFERENCED_PARAMETER(stack_start);
-        UNREFERENCED_PARAMETER(stack_length);
-        UNREFERENCED_PARAMETER(stack_mask);
+    // if (g_ubpf_fuzzer_options.get("UBPF_FUZZER_CONSTRAINT_CHECK")) {
+    //     ubpf_context_t* ubpf_context = reinterpret_cast<ubpf_context_t*>(context);
+    //     UNREFERENCED_PARAMETER(stack_start);
+    //     UNREFERENCED_PARAMETER(stack_length);
+    //     UNREFERENCED_PARAMETER(stack_mask);
 
-        // Check if this is an local call or exit instruction.
-        const ebpf_inst* inst = reinterpret_cast<const ebpf_inst*>(ubpf_context->program_start);
-        inst += program_counter;
+    //     // Check if this is an local call or exit instruction.
+    //     const ebpf_inst* inst = reinterpret_cast<const ebpf_inst*>(ubpf_context->program_start);
+    //     inst += program_counter;
 
-        std::string label;
+    //     std::string label;
 
-        for (size_t i = 0; i < g_pc_stack.size(); i++) {
-            label += std::to_string(g_pc_stack[i]) + "/";
-        }
+    //     for (size_t i = 0; i < g_pc_stack.size(); i++) {
+    //         label += std::to_string(g_pc_stack[i]) + "/";
+    //     }
 
-        label += std::to_string(program_counter) + ":-1";
+    //     label += std::to_string(program_counter) + ":-1";
 
-        // Local call.
-        if (inst->opcode == EBPF_OP_CALL && inst->src == 1) {
-            g_pc_stack.push_back(program_counter);
-        }
+    //     // Local call.
+    //     if (inst->opcode == EBPF_OP_CALL && inst->src == 1) {
+    //         g_pc_stack.push_back(program_counter);
+    //     }
 
-        // Exit.
-        if (inst->opcode == EBPF_OP_EXIT) {
-            if (!g_pc_stack.empty()) {
-                g_pc_stack.pop_back();
-            }
-        }
-       
+    //     // Exit.
+    //     if (inst->opcode == EBPF_OP_EXIT) {
+    //         if (!g_pc_stack.empty()) {
+    //             g_pc_stack.pop_back();
+    //         }
+    //     }
 
-        if (program_counter == 0) {
-            return;
-        }
 
-        // Build set of string constraints from the register values.
-        std::set<std::string> constraints;
-        constraints.insert("packet_size=" + std::to_string(ubpf_context->original_data_end - ubpf_context->original_data));
-        for (int i = 0; i < 10; i++) {
-            if ((register_mask & (1 << i)) == 0) {
-                continue;
-            }
-            uint64_t reg = registers[i];
-            std::string register_name = "r" + std::to_string(i);
+    //     if (program_counter == 0) {
+    //         return;
+    //     }
 
-            // Given the register value, classify it as packet, context, stack, or unknown and add the appropriate
-            // constraint.
-            address_type_t type = ubpf_classify_address(ubpf_context, reg);
-            switch (type) {
-            case address_type_t::Packet:
-                constraints.insert(register_name + ".type=packet");
-                constraints.insert(register_name + ".packet_offset=" + std::to_string(reg - ubpf_context->data));
-                constraints.insert(
-                    register_name + ".packet_size=" + std::to_string(ubpf_context->data_end - ubpf_context->data));
-                break;
+    //     // Build set of string constraints from the register values.
+    //     std::set<std::string> constraints;
+    //     constraints.insert("packet_size=" + std::to_string(ubpf_context->original_data_end - ubpf_context->original_data));
+    //     for (int i = 0; i < 10; i++) {
+    //         if ((register_mask & (1 << i)) == 0) {
+    //             continue;
+    //         }
+    //         uint64_t reg = registers[i];
+    //         std::string register_name = "r" + std::to_string(i);
 
-            case address_type_t::Context:
-                constraints.insert(register_name + ".type=ctx");
-                constraints.insert(
-                    register_name + ".ctx_offset=" + std::to_string(reg - reinterpret_cast<uint64_t>(ubpf_context)));
-                break;
+    //         // Given the register value, classify it as packet, context, stack, or unknown and add the appropriate
+    //         // constraint.
+    //         address_type_t type = ubpf_classify_address(ubpf_context, reg);
+    //         switch (type) {
+    //         case address_type_t::Packet:
+    //             constraints.insert(register_name + ".type=packet");
+    //             constraints.insert(register_name + ".packet_offset=" + std::to_string(reg - ubpf_context->data));
+    //             constraints.insert(
+    //                 register_name + ".packet_size=" + std::to_string(ubpf_context->data_end - ubpf_context->data));
+    //             break;
 
-            case address_type_t::Stack:
-                constraints.insert(register_name + ".type=stack");
-                constraints.insert(register_name + ".stack_offset=" + std::to_string(reg - ubpf_context->stack_start));
-                break;
+    //         case address_type_t::Context:
+    //             constraints.insert(register_name + ".type=ctx");
+    //             constraints.insert(
+    //                 register_name + ".ctx_offset=" + std::to_string(reg - reinterpret_cast<uint64_t>(ubpf_context)));
+    //             break;
 
-            case address_type_t::Unknown:
-                constraints.insert("r" + std::to_string(i) + ".uvalue=" + std::to_string(registers[i]));
-                constraints.insert(
-                    "r" + std::to_string(i) + ".svalue=" + std::to_string(static_cast<int64_t>(registers[i])));
-                break;
-            case address_type_t::Map:
-                constraints.insert(register_name + ".type=shared");
-                break;
-            }
-        }
+    //         case address_type_t::Stack:
+    //             constraints.insert(register_name + ".type=stack");
+    //             constraints.insert(register_name + ".stack_offset=" + std::to_string(reg - ubpf_context->stack_start));
+    //             break;
 
-        // Call ebpf_check_constraints_at_label with the set of string constraints at this label.
+    //         case address_type_t::Unknown:
+    //             constraints.insert("r" + std::to_string(i) + ".uvalue=" + std::to_string(registers[i]));
+    //             constraints.insert(
+    //                 "r" + std::to_string(i) + ".svalue=" + std::to_string(static_cast<int64_t>(registers[i])));
+    //             break;
+    //         case address_type_t::Map:
+    //             constraints.insert(register_name + ".type=shared");
+    //             break;
+    //         }
+    //     }
 
-        std::ostringstream os;
+    //     // Call ebpf_check_constraints_at_label with the set of string constraints at this label.
 
-        if (!ebpf_check_constraints_at_label(os, label, constraints)) {
-            std::cerr << "Label: " << label << std::endl;
-            std::cerr << os.str() << std::endl;
-            throw std::runtime_error("ebpf_check_constraints_at_label failed");
-        }
-    }
+    //     std::ostringstream os;
+
+    //     if (!ebpf_check_constraints_at_label(os, label, constraints)) {
+    //         std::cerr << "Label: " << label << std::endl;
+    //         std::cerr << os.str() << std::endl;
+    //         throw std::runtime_error("ebpf_check_constraints_at_label failed");
+    //     }
+    // }
 }
 
 /**
