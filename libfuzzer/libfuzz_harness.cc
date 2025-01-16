@@ -116,6 +116,8 @@ EbpfProgramType g_ubpf_program_type = {
     .is_privileged = false,
 };
 
+std::optional<Invariants> stored_invariants;
+
 /**
  * @brief This function is called by the verifier when parsing an ELF file to determine the type of the program being
  * loaded based on the section and path.
@@ -371,15 +373,15 @@ try {
     auto program = Program::from_sequence(prog, info, options.cfg_opts);
 
     // Verify the program. This will return false or throw an exception if the program is invalid.
-    auto invariants = analyze(program);
+    stored_invariants.emplace(analyze(program));
 
-    bool result = invariants.verified(program);
+    bool result = stored_invariants->verified(program);
 
     if (g_ubpf_fuzzer_options.get("UBPF_FUZZER_PRINT_VERIFIER_REPORT")) {
-        auto report = invariants.check_assertions(program);
+        auto report = stored_invariants->check_assertions(program);
         print_warnings(error_stream, report);
 
-        print_invariants(error_stream, program, false, invariants);
+        print_invariants(error_stream, program, false, *stored_invariants);
 
         std::cout << "verifier stats:" << std::endl;
         std::cout << "total_warnings: " << stats.total_warnings << std::endl;
@@ -534,95 +536,104 @@ ubpf_debug_function(
         std::cout << std::endl;
     }
 
+    if (g_ubpf_fuzzer_options.get("UBPF_FUZZER_CONSTRAINT_CHECK")) {
+        ubpf_context_t* ubpf_context = reinterpret_cast<ubpf_context_t*>(context);
+        UNREFERENCED_PARAMETER(stack_start);
+        UNREFERENCED_PARAMETER(stack_length);
+        UNREFERENCED_PARAMETER(stack_mask);
 
-    // if (g_ubpf_fuzzer_options.get("UBPF_FUZZER_CONSTRAINT_CHECK")) {
-    //     ubpf_context_t* ubpf_context = reinterpret_cast<ubpf_context_t*>(context);
-    //     UNREFERENCED_PARAMETER(stack_start);
-    //     UNREFERENCED_PARAMETER(stack_length);
-    //     UNREFERENCED_PARAMETER(stack_mask);
+        // Check if this is an local call or exit instruction.
+        const ebpf_inst* inst = reinterpret_cast<const ebpf_inst*>(ubpf_context->program_start);
+        inst += program_counter;
 
-    //     // Check if this is an local call or exit instruction.
-    //     const ebpf_inst* inst = reinterpret_cast<const ebpf_inst*>(ubpf_context->program_start);
-    //     inst += program_counter;
+        std::string stack_frame_prefix;
 
-    //     std::string label;
+        for (size_t i = 1; i < g_pc_stack.size(); i++) {
+            stack_frame_prefix += std::to_string(g_pc_stack[i]) + "/";
+        }
 
-    //     for (size_t i = 0; i < g_pc_stack.size(); i++) {
-    //         label += std::to_string(g_pc_stack[i]) + "/";
-    //     }
+        crab::label_t label{program_counter, -1, stack_frame_prefix};
 
-    //     label += std::to_string(program_counter) + ":-1";
+        // Local call.
+        if (inst->opcode == EBPF_OP_CALL && inst->src == 1) {
+            g_pc_stack.push_back(program_counter);
+        }
 
-    //     // Local call.
-    //     if (inst->opcode == EBPF_OP_CALL && inst->src == 1) {
-    //         g_pc_stack.push_back(program_counter);
-    //     }
-
-    //     // Exit.
-    //     if (inst->opcode == EBPF_OP_EXIT) {
-    //         if (!g_pc_stack.empty()) {
-    //             g_pc_stack.pop_back();
-    //         }
-    //     }
+        // Exit.
+        if (inst->opcode == EBPF_OP_EXIT) {
+            if (!g_pc_stack.empty()) {
+                g_pc_stack.pop_back();
+            }
+        }
 
 
-    //     if (program_counter == 0) {
-    //         return;
-    //     }
+        if (program_counter == 0) {
+            return;
+        }
 
-    //     // Build set of string constraints from the register values.
-    //     std::set<std::string> constraints;
-    //     constraints.insert("packet_size=" + std::to_string(ubpf_context->original_data_end - ubpf_context->original_data));
-    //     for (int i = 0; i < 10; i++) {
-    //         if ((register_mask & (1 << i)) == 0) {
-    //             continue;
-    //         }
-    //         uint64_t reg = registers[i];
-    //         std::string register_name = "r" + std::to_string(i);
+        // Build set of string constraints from the register values.
+        std::set<std::string> constraints;
+        constraints.insert("packet_size=" + std::to_string(ubpf_context->original_data_end - ubpf_context->original_data));
+        for (int i = 0; i < 10; i++) {
+            if ((register_mask & (1 << i)) == 0) {
+                continue;
+            }
+            uint64_t reg = registers[i];
+            std::string register_name = "r" + std::to_string(i);
 
-    //         // Given the register value, classify it as packet, context, stack, or unknown and add the appropriate
-    //         // constraint.
-    //         address_type_t type = ubpf_classify_address(ubpf_context, reg);
-    //         switch (type) {
-    //         case address_type_t::Packet:
-    //             constraints.insert(register_name + ".type=packet");
-    //             constraints.insert(register_name + ".packet_offset=" + std::to_string(reg - ubpf_context->data));
-    //             constraints.insert(
-    //                 register_name + ".packet_size=" + std::to_string(ubpf_context->data_end - ubpf_context->data));
-    //             break;
+            // Given the register value, classify it as packet, context, stack, or unknown and add the appropriate
+            // constraint.
+            address_type_t type = ubpf_classify_address(ubpf_context, reg);
+            switch (type) {
+            case address_type_t::Packet:
+                constraints.insert(register_name + ".type=packet");
+                constraints.insert(register_name + ".packet_offset=" + std::to_string(reg - ubpf_context->data));
+                constraints.insert(
+                    register_name + ".packet_size=" + std::to_string(ubpf_context->data_end - ubpf_context->data));
+                break;
 
-    //         case address_type_t::Context:
-    //             constraints.insert(register_name + ".type=ctx");
-    //             constraints.insert(
-    //                 register_name + ".ctx_offset=" + std::to_string(reg - reinterpret_cast<uint64_t>(ubpf_context)));
-    //             break;
+            case address_type_t::Context:
+                constraints.insert(register_name + ".type=ctx");
+                constraints.insert(
+                    register_name + ".ctx_offset=" + std::to_string(reg - reinterpret_cast<uint64_t>(ubpf_context)));
+                break;
 
-    //         case address_type_t::Stack:
-    //             constraints.insert(register_name + ".type=stack");
-    //             constraints.insert(register_name + ".stack_offset=" + std::to_string(reg - ubpf_context->stack_start));
-    //             break;
+            case address_type_t::Stack:
+                constraints.insert(register_name + ".type=stack");
+                constraints.insert(register_name + ".stack_offset=" + std::to_string(reg - ubpf_context->stack_start));
+                break;
 
-    //         case address_type_t::Unknown:
-    //             constraints.insert("r" + std::to_string(i) + ".uvalue=" + std::to_string(registers[i]));
-    //             constraints.insert(
-    //                 "r" + std::to_string(i) + ".svalue=" + std::to_string(static_cast<int64_t>(registers[i])));
-    //             break;
-    //         case address_type_t::Map:
-    //             constraints.insert(register_name + ".type=shared");
-    //             break;
-    //         }
-    //     }
+            case address_type_t::Unknown:
+                constraints.insert("r" + std::to_string(i) + ".uvalue=" + std::to_string(registers[i]));
+                constraints.insert(
+                    "r" + std::to_string(i) + ".svalue=" + std::to_string(static_cast<int64_t>(registers[i])));
+                break;
+            case address_type_t::Map:
+                constraints.insert(register_name + ".type=shared");
+                break;
+            }
+        }
 
-    //     // Call ebpf_check_constraints_at_label with the set of string constraints at this label.
+        std::ostringstream os;
+        string_invariant inv;
+        inv.maybe_inv = constraints;
 
-    //     std::ostringstream os;
+        // Call the verifier to check the constraints at the given label.
+        if (!stored_invariants->is_valid_before(label, inv)) {
+            std::cerr << "Label: " << label << std::endl;
+            std::cerr << "Verifier state: " << std::endl;
+            std::cerr << stored_invariants->invariant_at(label);
+            std::cerr << std::endl;
 
-    //     if (!ebpf_check_constraints_at_label(os, label, constraints)) {
-    //         std::cerr << "Label: " << label << std::endl;
-    //         std::cerr << os.str() << std::endl;
-    //         throw std::runtime_error("ebpf_check_constraints_at_label failed");
-    //     }
-    // }
+            std::cerr << "Actual state: " << std::endl;
+            std::cerr << inv << std::endl;
+
+            throw std::runtime_error("ebpf_check_constraints_at_label failed");
+        }
+
+        // if (!ebpf_check_constraints_at_label(os, label, constraints)) {
+        // }
+    }
 }
 
 /**
