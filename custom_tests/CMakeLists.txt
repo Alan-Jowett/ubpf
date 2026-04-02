@@ -18,10 +18,12 @@ target_include_directories(ubpf_custom_test_support PUBLIC ".srcs/")
 target_include_directories(ubpf_custom_test_support PRIVATE ${UBPF_TEST_INCLUDES})
 
 set(QEMU_RUNNER "")
-# Only use QEMU when cross-compiling for ARM64 (building on x86_64 for ARM64)
-# On native ARM64 systems, CMAKE_HOST_SYSTEM_PROCESSOR will also be aarch64
+# Only use QEMU when cross-compiling (building on a different host architecture)
+# On native systems, CMAKE_HOST_SYSTEM_PROCESSOR matches CMAKE_SYSTEM_PROCESSOR
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL aarch64 AND (NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL aarch64))
 	set(QEMU_RUNNER qemu-aarch64 -L /usr/aarch64-linux-gnu)
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL mips64 AND (NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL mips64))
+	set(QEMU_RUNNER qemu-mips64el -L /usr/mips64el-linux-gnuabi64)
 endif()
 
 foreach(test_file ${test_descr_files})
