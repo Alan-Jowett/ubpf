@@ -45,7 +45,7 @@ jobs:
       run: |
         git clone --depth 1 https://git.musl-libc.org/git/musl musl-src
         cd musl-src
-        CROSS_COMPILE='' CC="clang --target=mips64el-linux-musl -march=mips64r6" \
+        CROSS_COMPILE='' CC="clang --target=mips64el-linux-musl -march=mips64r6 -fuse-ld=lld" \
           ./configure \
             --prefix=${{ github.workspace }}/musl-sysroot \
             --target=mips64el-linux-musl \
