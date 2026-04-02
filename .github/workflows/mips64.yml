@@ -56,4 +56,4 @@ jobs:
     - name: Run tests via CTest (QEMU)
       run: |
         cd build
-        ctest --output-on-failure || true
+        ctest --output-on-failure
