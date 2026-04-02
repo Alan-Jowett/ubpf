@@ -2,10 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # MIPS64 cross-compilation and QEMU testing workflow.
-# Model:
-#   1. Build bpf_conformance natively (x64) — needs boost
-#   2. Cross-compile ubpf + ubpf_plugin for MIPS64
-#   3. Run tests via x64 bpf_conformance invoking qemu-mips64el for ubpf_plugin
+# Cross-compiles ubpf for MIPS64, then runs tests via CTest with
+# qemu-mips64el user-mode emulation (set up by CMake PREFIX/QEMU_RUNNER).
 
 name: MIPS64
 
@@ -37,23 +35,10 @@ jobs:
           ccache \
           ninja-build \
           cmake \
-          libboost-dev \
-          libboost-program-options-dev \
-          libboost-filesystem-dev \
           libelf-dev \
           g++-mips64el-linux-gnuabi64 \
           gcc-mips64el-linux-gnuabi64 \
           qemu-user
-
-    - name: Build bpf_conformance natively (x64)
-      run: |
-        cmake \
-          -G Ninja \
-          -S external/bpf_conformance \
-          -B build_conformance \
-          -DCMAKE_BUILD_TYPE=${{ inputs.build_type }}
-
-        cmake --build build_conformance
 
     - name: Cross-compile ubpf for MIPS64
       run: |
@@ -68,18 +53,7 @@ jobs:
 
         cmake --build build
 
-    - name: Run BPF conformance tests via QEMU
+    - name: Run tests via CTest (QEMU)
       run: |
-        # The conformance runner is x64-native; it invokes the plugin which
-        # is cross-compiled for MIPS64 and runs under qemu-mips64el.
-        build_conformance/bin/bpf_conformance_runner \
-          --test_file_directory tests \
-          --plugin_path build/bin/run-jit.sh \
-          --exclude-regex "$(cat tests/mips64-skip.txt 2>/dev/null || echo '^$')" \
-          || true
-
-        build_conformance/bin/bpf_conformance_runner \
-          --test_file_directory tests \
-          --plugin_path build/bin/run-interpret.sh \
-          --exclude-regex "$(cat tests/mips64-skip.txt 2>/dev/null || echo '^$')" \
-          || true
+        cd build
+        ctest --output-on-failure || true
