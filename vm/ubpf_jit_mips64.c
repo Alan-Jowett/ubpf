@@ -761,12 +761,6 @@ is_simple_imm(const struct ebpf_inst* inst)
     return inst->imm >= -32768 && inst->imm <= 32767;
 }
 
-static int
-is_alu64_op(const struct ebpf_inst* inst)
-{
-    return (inst->opcode & EBPF_CLS_MASK) == EBPF_CLS_ALU64;
-}
-
 static uint8_t
 to_reg_op(uint8_t opcode)
 {
