@@ -176,10 +176,8 @@ jobs:
       build_type: RelWithDebInfo
 
   linux_release_mips64:
-    uses: ./.github/workflows/posix.yml
+    uses: ./.github/workflows/mips64.yml
     with:
-      arch: mips64
-      platform: ubuntu-latest
       build_type: RelWithDebInfo
 
   linux_release_scan_build:
@@ -271,10 +269,8 @@ jobs:
       build_type: Debug
 
   linux_debug_mips64:
-    uses: ./.github/workflows/posix.yml
+    uses: ./.github/workflows/mips64.yml
     with:
-      arch: mips64
-      platform: ubuntu-latest
       build_type: Debug
 
   linux_debug_coverage:
