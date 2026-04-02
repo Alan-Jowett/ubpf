@@ -25,7 +25,7 @@ find_program(clang_path "clang" VALIDATOR clang_validator NO_CACHE HINTS ${UBPF_
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL aarch64 AND (NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL aarch64))
     set(PREFIX qemu-aarch64 -L /usr/aarch64-linux-gnu)
 elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL mips64 AND (NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL mips64))
-    set(PREFIX qemu-mips64el -L /usr/mips64el-linux-gnuabi64)
+    set(PREFIX qemu-mips64el -cpu I6500 -L /usr/mips64el-linux-gnuabi64)
 else()
     set(PREFIX)
 endif()
