@@ -752,7 +752,18 @@ emit_zero_extend_32(struct jit_state* state, enum MipsRegister rd)
 static bool
 is_imm_op(const struct ebpf_inst* inst)
 {
-    return (inst->opcode & EBPF_SRC_REG) == EBPF_SRC_IMM;
+    int class = inst->opcode & EBPF_CLS_MASK;
+    bool is_imm = (inst->opcode & EBPF_SRC_REG) == EBPF_SRC_IMM;
+    bool is_endian = (inst->opcode & EBPF_ALU_OP_MASK) == 0xd0;
+    bool is_neg = (inst->opcode & EBPF_ALU_OP_MASK) == 0x80;
+    bool is_call = inst->opcode == EBPF_OP_CALL;
+    bool is_exit = inst->opcode == EBPF_OP_EXIT;
+    bool is_ja = inst->opcode == EBPF_OP_JA || inst->opcode == EBPF_OP_JA32;
+    bool is_alu = (class == EBPF_CLS_ALU || class == EBPF_CLS_ALU64) && !is_endian && !is_neg;
+    bool is_jmp = (class == EBPF_CLS_JMP && !is_ja && !is_call && !is_exit);
+    bool is_jmp32 = (class == EBPF_CLS_JMP32 && inst->opcode != EBPF_OP_JA32);
+    bool is_store = class == EBPF_CLS_ST;
+    return (is_imm && (is_alu || is_jmp || is_jmp32)) || is_store;
 }
 
 static bool
