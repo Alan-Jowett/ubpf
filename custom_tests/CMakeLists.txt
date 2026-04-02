@@ -23,7 +23,7 @@ set(QEMU_RUNNER "")
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL aarch64 AND (NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL aarch64))
 	set(QEMU_RUNNER qemu-aarch64 -L /usr/aarch64-linux-gnu)
 elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL mips64 AND (NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL mips64))
-	set(QEMU_RUNNER qemu-mips64el -cpu I6500 -L /usr/mips64el-linux-gnuabi64)
+	set(QEMU_RUNNER qemu-mips64el -cpu I6500)
 endif()
 
 foreach(test_file ${test_descr_files})

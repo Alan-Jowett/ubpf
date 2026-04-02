@@ -1,9 +1,9 @@
 # Copyright (c) 2022-present, IO Visor Project
 # SPDX-License-Identifier: Apache-2.0
 
-# MIPS64 cross-compilation and QEMU testing workflow.
-# Cross-compiles ubpf for MIPS64, then runs tests via CTest with
-# qemu-mips64el user-mode emulation (set up by CMake PREFIX/QEMU_RUNNER).
+# MIPS64r6 cross-compilation and QEMU testing workflow.
+# Uses clang + musl (static) to produce fully self-contained R6 binaries.
+# This avoids the problem of Ubuntu's MIPS64 sysroot being pre-R6.
 
 name: MIPS64
 
@@ -32,15 +32,59 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          ccache \
           ninja-build \
           cmake \
-          libelf-dev \
-          g++-mips64el-linux-gnuabi64 \
-          gcc-mips64el-linux-gnuabi64 \
+          clang \
+          lld \
+          llvm \
+          libc++-dev \
+          libc++abi-dev \
           qemu-user
 
-    - name: Cross-compile ubpf for MIPS64
+    - name: Build musl libc for MIPS64r6
+      run: |
+        git clone --depth 1 https://git.musl-libc.org/cgit/musl musl-src
+        cd musl-src
+        CROSS_COMPILE='' CC="clang --target=mips64el-linux-musl -march=mips64r6" \
+          ./configure \
+            --prefix=${{ github.workspace }}/musl-sysroot \
+            --target=mips64el-linux-musl \
+            --disable-shared
+        make -j$(nproc) AR=llvm-ar RANLIB=llvm-ranlib
+        make install
+
+    - name: Build libc++ for MIPS64r6
+      run: |
+        # Build LLVM's libc++ and libc++abi for MIPS64r6 static linking
+        git clone --depth 1 --branch llvmorg-$(clang --version | grep -oP '\d+\.\d+\.\d+' | head -1) \
+          https://github.com/llvm/llvm-project.git llvm-src || \
+        git clone --depth 1 https://github.com/llvm/llvm-project.git llvm-src
+
+        cmake -G Ninja \
+          -S llvm-src/runtimes \
+          -B build-libcxx \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_C_FLAGS="--target=mips64el-linux-musl -march=mips64r6 --sysroot=${{ github.workspace }}/musl-sysroot" \
+          -DCMAKE_CXX_FLAGS="--target=mips64el-linux-musl -march=mips64r6 --sysroot=${{ github.workspace }}/musl-sysroot" \
+          -DCMAKE_AR=llvm-ar \
+          -DCMAKE_RANLIB=llvm-ranlib \
+          -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi" \
+          -DLIBCXX_ENABLE_SHARED=OFF \
+          -DLIBCXX_ENABLE_STATIC=ON \
+          -DLIBCXX_CXX_ABI=libcxxabi \
+          -DLIBCXX_INCLUDE_BENCHMARKS=OFF \
+          -DLIBCXX_INCLUDE_TESTS=OFF \
+          -DLIBCXXABI_ENABLE_SHARED=OFF \
+          -DLIBCXXABI_ENABLE_STATIC=ON \
+          -DLIBCXXABI_USE_LLVM_UNWINDER=OFF
+
+        cmake --build build-libcxx --target cxx cxxabi
+
+        # Install into musl sysroot
+        cmake --install build-libcxx --prefix ${{ github.workspace }}/musl-sysroot
+
+    - name: Cross-compile ubpf for MIPS64r6
       run: |
         cmake \
           -G Ninja \
@@ -48,6 +92,7 @@ jobs:
           -B build \
           -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} \
           -DCMAKE_TOOLCHAIN_FILE=cmake/mips64.cmake \
+          -DCMAKE_SYSROOT=${{ github.workspace }}/musl-sysroot \
           -DUBPF_ENABLE_TESTS=true \
           -DUBPF_SKIP_EXTERNAL=true
 
