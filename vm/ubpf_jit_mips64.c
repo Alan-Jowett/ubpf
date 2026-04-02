@@ -322,12 +322,6 @@ emit_addu(struct jit_state* state, enum MipsRegister rd, enum MipsRegister rs, e
 }
 
 static void
-emit_subu(struct jit_state* state, enum MipsRegister rd, enum MipsRegister rs, enum MipsRegister rt)
-{
-    emit_instruction(state, mips_r_type(MIPS_OP_SPECIAL, rs, rt, rd, 0, MIPS_FN_SUBU));
-}
-
-static void
 emit_slt(struct jit_state* state, enum MipsRegister rd, enum MipsRegister rs, enum MipsRegister rt)
 {
     emit_instruction(state, mips_r_type(MIPS_OP_SPECIAL, rs, rt, rd, 0, MIPS_FN_SLT));
@@ -503,36 +497,6 @@ emit_dmodu(struct jit_state* state, enum MipsRegister rd, enum MipsRegister rs, 
     emit_instruction(state, mips_r_type(MIPS_OP_SPECIAL, rs, rt, rd, MIPS_MOD_SA, MIPS_FN_DDIVU_R6));
 }
 
-static void
-emit_mul(struct jit_state* state, enum MipsRegister rd, enum MipsRegister rs, enum MipsRegister rt)
-{
-    emit_instruction(state, mips_r_type(MIPS_OP_SPECIAL, rs, rt, rd, MIPS_MUL_SA, MIPS_FN_MUL_R6));
-}
-
-static void
-emit_div(struct jit_state* state, enum MipsRegister rd, enum MipsRegister rs, enum MipsRegister rt)
-{
-    emit_instruction(state, mips_r_type(MIPS_OP_SPECIAL, rs, rt, rd, MIPS_MUL_SA, MIPS_FN_DIV_R6));
-}
-
-static void
-emit_mod(struct jit_state* state, enum MipsRegister rd, enum MipsRegister rs, enum MipsRegister rt)
-{
-    emit_instruction(state, mips_r_type(MIPS_OP_SPECIAL, rs, rt, rd, MIPS_MOD_SA, MIPS_FN_DIV_R6));
-}
-
-static void
-emit_divu(struct jit_state* state, enum MipsRegister rd, enum MipsRegister rs, enum MipsRegister rt)
-{
-    emit_instruction(state, mips_r_type(MIPS_OP_SPECIAL, rs, rt, rd, MIPS_MUL_SA, MIPS_FN_DIVU_R6));
-}
-
-static void
-emit_modu(struct jit_state* state, enum MipsRegister rd, enum MipsRegister rs, enum MipsRegister rt)
-{
-    emit_instruction(state, mips_r_type(MIPS_OP_SPECIAL, rs, rt, rd, MIPS_MOD_SA, MIPS_FN_DIVU_R6));
-}
-
 // Load/Store
 static void
 emit_lb(struct jit_state* state, enum MipsRegister rt, enum MipsRegister base, int16_t offset)
@@ -600,82 +564,6 @@ emit_sd(struct jit_state* state, enum MipsRegister rt, enum MipsRegister base, i
     emit_instruction(state, mips_i_type(MIPS_OP_SD, base, rt, (uint16_t)offset));
 }
 
-// R6 Compact branches — emit with placeholder offset (to be patched)
-
-// BC: unconditional, 26-bit offset
-static uint32_t
-emit_bc(struct jit_state* state, struct PatchableTarget target)
-{
-    uint32_t offset_loc = state->offset;
-    emit_instruction(state, mips_j26_type(MIPS_OP_BC, 0)); // placeholder
-    emit_patchable_relative(state->jumps, offset_loc, target, state->num_jumps++);
-    return offset_loc;
-}
-
-// BALC: branch and link compact, 26-bit offset
-static uint32_t
-emit_balc(struct jit_state* state, struct PatchableTarget target)
-{
-    uint32_t offset_loc = state->offset;
-    emit_instruction(state, mips_j26_type(MIPS_OP_BALC, 0));
-    emit_patchable_relative(state->local_calls, offset_loc, target, state->num_local_calls++);
-    return offset_loc;
-}
-
-// BEQC: compare-and-branch equal, 16-bit offset.
-// The register encoding requires rs < rt. Since the comparison
-// is symmetric (==), we swap if needed to satisfy the constraint.
-static uint32_t
-emit_beqc(struct jit_state* state, enum MipsRegister rs, enum MipsRegister rt, struct PatchableTarget target)
-{
-    if (rs > rt) {
-        enum MipsRegister tmp = rs;
-        rs = rt;
-        rt = tmp;
-    }
-    assert(rs != REG_ZERO && rt != REG_ZERO && rs < rt);
-    uint32_t offset_loc = state->offset;
-    emit_instruction(state, mips_i_type(MIPS_OP_POP06, rs, rt, 0)); // placeholder offset
-    emit_patchable_relative(state->jumps, offset_loc, target, state->num_jumps++);
-    return offset_loc;
-}
-
-// BNEC: compare-and-branch not equal, 16-bit offset.
-static uint32_t
-emit_bnec(struct jit_state* state, enum MipsRegister rs, enum MipsRegister rt, struct PatchableTarget target)
-{
-    if (rs > rt) {
-        enum MipsRegister tmp = rs;
-        rs = rt;
-        rt = tmp;
-    }
-    assert(rs != REG_ZERO && rt != REG_ZERO && rs < rt);
-    uint32_t offset_loc = state->offset;
-    emit_instruction(state, mips_i_type(MIPS_OP_POP16, rs, rt, 0));
-    emit_patchable_relative(state->jumps, offset_loc, target, state->num_jumps++);
-    return offset_loc;
-}
-
-// BNEZC: branch if rs != 0, 21-bit offset
-static uint32_t
-emit_bnezc(struct jit_state* state, enum MipsRegister rs, struct PatchableTarget target)
-{
-    uint32_t offset_loc = state->offset;
-    emit_instruction(state, mips_cmpbr21_type(MIPS_OP_BNEZC, rs, 0));
-    emit_patchable_relative(state->jumps, offset_loc, target, state->num_jumps++);
-    return offset_loc;
-}
-
-// BEQZC: branch if rs == 0, 21-bit offset
-static uint32_t
-emit_beqzc(struct jit_state* state, enum MipsRegister rs, struct PatchableTarget target)
-{
-    uint32_t offset_loc = state->offset;
-    emit_instruction(state, mips_cmpbr21_type(MIPS_OP_BEQZC, rs, 0));
-    emit_patchable_relative(state->jumps, offset_loc, target, state->num_jumps++);
-    return offset_loc;
-}
-
 // R6 compact indirect jumps (no delay slot) — Spec §8.4
 // JIC rt, offset: PC = GPR[rt] + sign_extend(offset). No delay slot.
 // Encoding: POP66 (0x36) with rs=0.
@@ -691,20 +579,6 @@ static void
 emit_jialc(struct jit_state* state, enum MipsRegister rt, int16_t offset)
 {
     emit_instruction(state, mips_i_type(MIPS_OP_BNEZC, REG_ZERO, rt, (uint16_t)offset));
-}
-
-// JALR: indirect jump and link (LEGACY — has delay slot, avoid in R6)
-static void
-emit_jalr(struct jit_state* state, enum MipsRegister rd, enum MipsRegister rs)
-{
-    emit_instruction(state, mips_r_type(MIPS_OP_SPECIAL, rs, 0, rd, 0, MIPS_FN_JALR));
-}
-
-// JR (encoded as JALR $zero, rs in R6 — has delay slot, avoid in R6)
-static void
-emit_jr(struct jit_state* state, enum MipsRegister rs)
-{
-    emit_jalr(state, REG_ZERO, rs);
 }
 
 // Special instructions (SPECIAL3 opcode)
@@ -1457,8 +1331,6 @@ translate(struct ubpf_vm* vm, struct jit_state* state, char** errmsg)
         uint32_t target_pc = (uint32_t)target_pc_64;
 
         DECLARE_PATCHABLE_REGULAR_EBPF_TARGET(tgt, target_pc)
-
-        int sixty_four = is_alu64_op(&inst);
 
         // Convert immediate ops to register ops after materializing the immediate.
         // Exception: MOV_IMM/MOV64_IMM handled directly in switch.
