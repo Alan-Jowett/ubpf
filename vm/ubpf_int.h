@@ -183,6 +183,21 @@ ubpf_jit_update_helper_null(
     size_t size,
     uint32_t offset);
 
+// mips64
+struct ubpf_jit_result
+ubpf_translate_mips64(struct ubpf_vm* vm, uint8_t* buffer, size_t* size, enum JitMode jit_mode);
+bool
+ubpf_jit_update_dispatcher_mips64(
+    struct ubpf_vm* vm, external_function_dispatcher_t new_dispatcher, uint8_t* buffer, size_t size, uint32_t offset);
+bool
+ubpf_jit_update_helper_mips64(
+    struct ubpf_vm* vm,
+    extended_external_helper_t new_helper,
+    unsigned int idx,
+    uint8_t* buffer,
+    size_t size,
+    uint32_t offset);
+
 char*
 ubpf_error(const char* fmt, ...);
 unsigned int
