@@ -3,7 +3,12 @@
 
 # MIPS64r6 cross-compilation and QEMU testing workflow.
 # Uses clang + musl (static) to produce fully self-contained R6 binaries.
-# This avoids the problem of Ubuntu's MIPS64 sysroot being pre-R6.
+#
+# Pipeline:
+#   1. Build musl libc + compiler-rt builtins + libc++ for MIPS64r6
+#   2. Build bpf_conformance_runner natively (x64, needs boost)
+#   3. Cross-compile ubpf + ubpf_plugin for MIPS64r6 (static, uses musl sysroot)
+#   4. Run conformance tests via x64 runner invoking QEMU for the plugin
 
 name: MIPS64
 
@@ -32,12 +37,9 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          ninja-build \
-          cmake \
-          clang \
-          lld \
-          llvm \
-          qemu-user
+          ninja-build cmake clang lld llvm qemu-user \
+          libboost-dev libboost-program-options-dev libboost-filesystem-dev \
+          linux-libc-dev
 
     - name: Build musl libc for MIPS64r6
       run: |
@@ -45,15 +47,20 @@ jobs:
         cd musl-src
         CROSS_COMPILE='' CC="clang --target=mips64el-linux-musl -march=mips64r6 -fuse-ld=lld" \
           ./configure \
-            --prefix=${{ github.workspace }}/musl-sysroot \
+            --prefix=$GITHUB_WORKSPACE/musl-sysroot \
             --target=mips64el-linux-musl \
             --disable-shared
         make -j$(nproc) AR=llvm-ar RANLIB=llvm-ranlib
         make install
+        # Copy kernel headers (needed by libc++)
+        cp -r /usr/include/linux $GITHUB_WORKSPACE/musl-sysroot/include/
+        cp -r /usr/include/asm-generic $GITHUB_WORKSPACE/musl-sysroot/include/
+        cp -r /usr/include/asm-generic $GITHUB_WORKSPACE/musl-sysroot/include/asm
 
     - name: Build compiler-rt builtins for MIPS64r6
       run: |
-        git clone --depth 1 --branch llvmorg-$(clang --version | grep -oP '\d+' | head -1).0.0 \
+        CLANG_MAJOR=$(clang --version | grep -oP '\d+' | head -1)
+        git clone --depth 1 --branch llvmorg-${CLANG_MAJOR}.0.0 \
           --filter=blob:none --sparse \
           https://github.com/llvm/llvm-project.git llvm-sparse || \
         git clone --depth 1 --filter=blob:none --sparse \
@@ -62,38 +69,62 @@ jobs:
         git sparse-checkout set compiler-rt cmake
 
         cmake -G Ninja \
-          -S compiler-rt/lib/builtins \
-          -B build-builtins \
-          -DCMAKE_C_COMPILER=clang \
-          -DCMAKE_ASM_COMPILER=clang \
-          -DCMAKE_AR=$(which llvm-ar) \
-          -DCMAKE_RANLIB=$(which llvm-ranlib) \
-          -DCMAKE_C_COMPILER_WORKS=1 \
-          -DCMAKE_ASM_COMPILER_WORKS=1 \
+          -S compiler-rt/lib/builtins -B build-builtins \
+          -DCMAKE_C_COMPILER=clang -DCMAKE_ASM_COMPILER=clang \
+          -DCMAKE_AR=$(which llvm-ar) -DCMAKE_RANLIB=$(which llvm-ranlib) \
+          -DCMAKE_C_COMPILER_WORKS=1 -DCMAKE_ASM_COMPILER_WORKS=1 \
           -DCMAKE_SYSTEM_NAME=Linux \
-          -DCMAKE_C_FLAGS="--target=mips64el-linux-musl -march=mips64r6 --sysroot=${{ github.workspace }}/musl-sysroot -fPIC" \
-          -DCMAKE_ASM_FLAGS="--target=mips64el-linux-musl -march=mips64r6 --sysroot=${{ github.workspace }}/musl-sysroot" \
+          -DCMAKE_C_FLAGS="--target=mips64el-linux-musl -march=mips64r6 --sysroot=$GITHUB_WORKSPACE/musl-sysroot -fPIC" \
+          -DCMAKE_ASM_FLAGS="--target=mips64el-linux-musl -march=mips64r6 --sysroot=$GITHUB_WORKSPACE/musl-sysroot" \
           -DCMAKE_C_COMPILER_TARGET=mips64el-linux-musl \
-          -DCOMPILER_RT_BAREMETAL_BUILD=ON \
-          -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON
+          -DCOMPILER_RT_BAREMETAL_BUILD=ON -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON
 
         ninja -C build-builtins
         cp build-builtins/lib/linux/libclang_rt.builtins-mips64el.a \
-           ${{ github.workspace }}/musl-sysroot/lib/libclang_rt.builtins.a
+           $GITHUB_WORKSPACE/musl-sysroot/lib/libclang_rt.builtins.a
+
+    - name: Build libc++ for MIPS64r6
+      run: |
+        cd llvm-sparse
+        git sparse-checkout add runtimes libcxx libcxxabi libunwind llvm/cmake llvm/utils/llvm-lit
+        mkdir -p llvm/utils/llvm-lit && echo "# stub" > llvm/utils/llvm-lit/CMakeLists.txt
+
+        cmake -G Ninja -S runtimes -B build-libcxx \
+          -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_C_COMPILER_WORKS=1 -DCMAKE_CXX_COMPILER_WORKS=1 \
+          -DCMAKE_SYSTEM_NAME=Linux \
+          -DCMAKE_AR=$(which llvm-ar) -DCMAKE_RANLIB=$(which llvm-ranlib) \
+          -DCMAKE_C_FLAGS="--target=mips64el-linux-musl -march=mips64r6 --sysroot=$GITHUB_WORKSPACE/musl-sysroot -fPIC" \
+          -DCMAKE_CXX_FLAGS="--target=mips64el-linux-musl -march=mips64r6 --sysroot=$GITHUB_WORKSPACE/musl-sysroot -fPIC -D_LIBCPP_HAS_MUSL_LIBC" \
+          -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld -nostdlib -L$GITHUB_WORKSPACE/musl-sysroot/lib $GITHUB_WORKSPACE/musl-sysroot/lib/crt1.o $GITHUB_WORKSPACE/musl-sysroot/lib/crti.o $GITHUB_WORKSPACE/musl-sysroot/lib/crtn.o -lc -lclang_rt.builtins" \
+          -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi" \
+          -DLIBCXX_ENABLE_SHARED=OFF -DLIBCXX_ENABLE_STATIC=ON \
+          -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_INCLUDE_BENCHMARKS=OFF -DLIBCXX_INCLUDE_TESTS=OFF \
+          -DLIBCXXABI_ENABLE_SHARED=OFF -DLIBCXXABI_ENABLE_STATIC=ON \
+          -DLIBCXXABI_USE_LLVM_UNWINDER=OFF -DLIBCXXABI_INCLUDE_TESTS=OFF \
+          -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=OFF
+
+        cmake --build build-libcxx --target cxx cxxabi
+        cmake --install build-libcxx --prefix $GITHUB_WORKSPACE/musl-sysroot
+
+    - name: Build bpf_conformance_runner natively (x64)
+      run: |
+        cmake -G Ninja \
+          -S external/bpf_conformance \
+          -B build-conformance \
+          -DCMAKE_BUILD_TYPE=${{ inputs.build_type }}
+        cmake --build build-conformance
 
     - name: Cross-compile ubpf for MIPS64r6
       run: |
-        cmake \
-          -G Ninja \
-          -S . \
-          -B build \
+        cmake -G Ninja -S . -B build \
           -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} \
           -DCMAKE_TOOLCHAIN_FILE=cmake/mips64.cmake \
-          -DCMAKE_SYSROOT=${{ github.workspace }}/musl-sysroot \
+          -DCMAKE_SYSROOT=$GITHUB_WORKSPACE/musl-sysroot \
           -DUBPF_ENABLE_TESTS=true \
           -DUBPF_SKIP_EXTERNAL=true \
-          -DUBPF_SKIP_CUSTOM_TESTS=true
-
+          -DUBPF_SKIP_CUSTOM_TESTS=true \
+          -DBPF_CONFORMANCE_RUNNER=$GITHUB_WORKSPACE/build-conformance/bin/bpf_conformance_runner
         cmake --build build
 
     - name: Run tests via CTest (QEMU)

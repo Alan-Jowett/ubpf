@@ -23,7 +23,7 @@ set(CMAKE_CXX_COMPILER clang++)
 # Target MIPS64r6 little-endian with musl libc, static linking, LLVM linker.
 # Use -nostdlib and link CRT/libs explicitly so we don't need GCC's crtbegin/crtend.
 set(CMAKE_C_FLAGS_INIT "--target=mips64el-linux-musl -march=mips64r6")
-set(CMAKE_CXX_FLAGS_INIT "--target=mips64el-linux-musl -march=mips64r6")
+set(CMAKE_CXX_FLAGS_INIT "--target=mips64el-linux-musl -march=mips64r6 -stdlib=libc++")
 set(CMAKE_EXE_LINKER_FLAGS_INIT "-static -fuse-ld=lld --target=mips64el-linux-musl -nostdlib -L${CMAKE_SYSROOT}/lib ${CMAKE_SYSROOT}/lib/crt1.o ${CMAKE_SYSROOT}/lib/crti.o ${CMAKE_SYSROOT}/lib/crtn.o -lc -lclang_rt.builtins")
 
 # Use LLVM tools for cross-compilation

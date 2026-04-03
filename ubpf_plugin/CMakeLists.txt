@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-if (UBPF_SKIP_EXTERNAL)
+if (UBPF_SKIP_EXTERNAL AND NOT BPF_CONFORMANCE_RUNNER)
     message(WARNING "Skipping configuration of tests that require external package support.")
     return()
 endif()
@@ -15,7 +15,9 @@ add_executable(
     ubpf_plugin.cc
 )
 
-add_dependencies(ubpf_plugin Conformance-build)
+if(NOT UBPF_SKIP_EXTERNAL)
+    add_dependencies(ubpf_plugin Conformance-build)
+endif()
 
 target_include_directories("ubpf_plugin" PRIVATE
     "${CMAKE_SOURCE_DIR}/vm"
@@ -50,6 +52,9 @@ else()
 endif()
 
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL aarch64 AND (NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL aarch64))
+    set(PLUGIN_JIT --plugin_path ${CMAKE_BINARY_DIR}/bin/run-jit.sh)
+    set(PLUGIN_INTERPRET --plugin_path ${CMAKE_BINARY_DIR}/bin/run-interpret.sh)
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL mips64 AND (NOT CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL mips64))
     set(PLUGIN_JIT --plugin_path ${CMAKE_BINARY_DIR}/bin/run-jit.sh)
     set(PLUGIN_INTERPRET --plugin_path ${CMAKE_BINARY_DIR}/bin/run-interpret.sh)
 else()
