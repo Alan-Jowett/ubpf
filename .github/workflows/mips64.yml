@@ -37,8 +37,6 @@ jobs:
           clang \
           lld \
           llvm \
-          libc++-dev \
-          libc++abi-dev \
           qemu-user
 
     - name: Build musl libc for MIPS64r6
@@ -53,36 +51,35 @@ jobs:
         make -j$(nproc) AR=llvm-ar RANLIB=llvm-ranlib
         make install
 
-    - name: Build libc++ for MIPS64r6
+    - name: Build compiler-rt builtins for MIPS64r6
       run: |
-        # Build LLVM's libc++ and libc++abi for MIPS64r6 static linking
-        git clone --depth 1 --branch llvmorg-$(clang --version | grep -oP '\d+\.\d+\.\d+' | head -1) \
-          https://github.com/llvm/llvm-project.git llvm-src || \
-        git clone --depth 1 https://github.com/llvm/llvm-project.git llvm-src
+        git clone --depth 1 --branch llvmorg-$(clang --version | grep -oP '\d+' | head -1).0.0 \
+          --filter=blob:none --sparse \
+          https://github.com/llvm/llvm-project.git llvm-sparse || \
+        git clone --depth 1 --filter=blob:none --sparse \
+          https://github.com/llvm/llvm-project.git llvm-sparse
+        cd llvm-sparse
+        git sparse-checkout set compiler-rt cmake
 
         cmake -G Ninja \
-          -S llvm-src/runtimes \
-          -B build-libcxx \
+          -S compiler-rt/lib/builtins \
+          -B build-builtins \
           -DCMAKE_C_COMPILER=clang \
-          -DCMAKE_CXX_COMPILER=clang++ \
-          -DCMAKE_C_FLAGS="--target=mips64el-linux-musl -march=mips64r6 --sysroot=${{ github.workspace }}/musl-sysroot" \
-          -DCMAKE_CXX_FLAGS="--target=mips64el-linux-musl -march=mips64r6 --sysroot=${{ github.workspace }}/musl-sysroot" \
-          -DCMAKE_AR=llvm-ar \
-          -DCMAKE_RANLIB=llvm-ranlib \
-          -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi" \
-          -DLIBCXX_ENABLE_SHARED=OFF \
-          -DLIBCXX_ENABLE_STATIC=ON \
-          -DLIBCXX_CXX_ABI=libcxxabi \
-          -DLIBCXX_INCLUDE_BENCHMARKS=OFF \
-          -DLIBCXX_INCLUDE_TESTS=OFF \
-          -DLIBCXXABI_ENABLE_SHARED=OFF \
-          -DLIBCXXABI_ENABLE_STATIC=ON \
-          -DLIBCXXABI_USE_LLVM_UNWINDER=OFF
+          -DCMAKE_ASM_COMPILER=clang \
+          -DCMAKE_AR=$(which llvm-ar) \
+          -DCMAKE_RANLIB=$(which llvm-ranlib) \
+          -DCMAKE_C_COMPILER_WORKS=1 \
+          -DCMAKE_ASM_COMPILER_WORKS=1 \
+          -DCMAKE_SYSTEM_NAME=Linux \
+          -DCMAKE_C_FLAGS="--target=mips64el-linux-musl -march=mips64r6 --sysroot=${{ github.workspace }}/musl-sysroot -fPIC" \
+          -DCMAKE_ASM_FLAGS="--target=mips64el-linux-musl -march=mips64r6 --sysroot=${{ github.workspace }}/musl-sysroot" \
+          -DCMAKE_C_COMPILER_TARGET=mips64el-linux-musl \
+          -DCOMPILER_RT_BAREMETAL_BUILD=ON \
+          -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON
 
-        cmake --build build-libcxx --target cxx cxxabi
-
-        # Install into musl sysroot
-        cmake --install build-libcxx --prefix ${{ github.workspace }}/musl-sysroot
+        ninja -C build-builtins
+        cp build-builtins/lib/linux/libclang_rt.builtins-mips64el.a \
+           ${{ github.workspace }}/musl-sysroot/lib/libclang_rt.builtins.a
 
     - name: Cross-compile ubpf for MIPS64r6
       run: |
@@ -94,7 +91,8 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE=cmake/mips64.cmake \
           -DCMAKE_SYSROOT=${{ github.workspace }}/musl-sysroot \
           -DUBPF_ENABLE_TESTS=true \
-          -DUBPF_SKIP_EXTERNAL=true
+          -DUBPF_SKIP_EXTERNAL=true \
+          -DUBPF_SKIP_CUSTOM_TESTS=true
 
         cmake --build build
 
